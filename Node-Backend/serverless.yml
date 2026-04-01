@@ -120,7 +120,7 @@ functions:
               - 'CloudWatch Alarm State Change'
       # Also triggered by SQS for batch ingestion
       - sqs:
-          arn: !Sub 'arn:aws:sqs:${self:provider.region}:*:cloud-automation-gnn-event-queue-${self:provider.stage}'
+          arn: 'arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-event-queue-${self:provider.stage}'
           batchSize: 10
           maximumBatchingWindow: 30
           functionResponseType: ReportBatchItemFailures
@@ -147,3 +147,23 @@ custom:
     exclude:               # already bundled by AWS Lambda runtime
       - '@aws-sdk/*'
     keepOutputDirectory: false
+
+
+
+package:
+  patterns:
+    - '!node_modules/aws-sdk/**'   # AWS SDK is available by default in Lambda
+    - '!node_modules/.bin/**'
+    - '!node_modules/**/test/**'
+    - '!node_modules/**/tests/**'
+    - '!node_modules/**/docs/**'
+    - '!node_modules/**/.github/**'
+    - '!*.test.js'
+    - '!*.spec.js'
+    - '!*.zip'
+    - '!*.log'
+    - '!Public/**'
+    - '!README.md'
+    - '!coverage/**'
+    - '!scripts/**'
+    - '!docs/**'
