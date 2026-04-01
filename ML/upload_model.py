@@ -105,7 +105,7 @@ def upload_model(local_path: str, bucket: str, key: str, region: str):
 def main():
     parser = argparse.ArgumentParser(description="Upload GNN model to S3")
     parser.add_argument("--bucket", type=str,
-                        default=os.getenv("MODEL_BUCKET", "cloud-automation-gnn-models"))
+                        default=os.getenv("MODEL_BUCKET", "cloud-automation-gnn-models-dev"))
     parser.add_argument("--key", type=str,
                         default=os.getenv("MODEL_KEY", "models/gnn_model.pt"))
     parser.add_argument("--model", type=str,
