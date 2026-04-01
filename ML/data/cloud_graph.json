@@ -1,0 +1,336 @@
+{
+  "nodes": [
+    {
+      "id": "ec2-0",
+      "type": "EC2",
+      "label": 1,
+      "cpu": 97.6,
+      "memory": 32.38,
+      "latency": 224.34,
+      "error_rate": 0.0224,
+      "request_count": 506.0
+    },
+    {
+      "id": "ec2-1",
+      "type": "EC2",
+      "label": 0,
+      "cpu": 28.99,
+      "memory": 21.34,
+      "latency": 56.24,
+      "error_rate": 0.0157,
+      "request_count": 115.9
+    },
+    {
+      "id": "ec2-2",
+      "type": "EC2",
+      "label": 0,
+      "cpu": 18.95,
+      "memory": 49.24,
+      "latency": 95.39,
+      "error_rate": 0.0074,
+      "request_count": 453.6
+    },
+    {
+      "id": "ec2-3",
+      "type": "EC2",
+      "label": 1,
+      "cpu": 95.93,
+      "memory": 27.18,
+      "latency": 228.62,
+      "error_rate": 0.0091,
+      "request_count": 229.2
+    },
+    {
+      "id": "ec2-4",
+      "type": "EC2",
+      "label": 0,
+      "cpu": 27.1,
+      "memory": 36.15,
+      "latency": 71.27,
+      "error_rate": 0.0087,
+      "request_count": 126.1
+    },
+    {
+      "id": "ec2-5",
+      "type": "EC2",
+      "label": 0,
+      "cpu": 30.67,
+      "memory": 25.62,
+      "latency": 140.68,
+      "error_rate": 0.0033,
+      "request_count": 275.9
+    },
+    {
+      "id": "ec2-6",
+      "type": "EC2",
+      "label": 0,
+      "cpu": 38.29,
+      "memory": 59.85,
+      "latency": 73.4,
+      "error_rate": 0.0066,
+      "request_count": 141.7
+    },
+    {
+      "id": "ec2-7",
+      "type": "EC2",
+      "label": 0,
+      "cpu": 39.76,
+      "memory": 54.79,
+      "latency": 148.23,
+      "error_rate": 0.0258,
+      "request_count": 619.9
+    },
+    {
+      "id": "lambda-0",
+      "type": "Lambda",
+      "label": 1,
+      "cpu": 89.47,
+      "memory": 98.49,
+      "latency": 465.16,
+      "error_rate": 0.1453,
+      "request_count": 225.7
+    },
+    {
+      "id": "lambda-1",
+      "type": "Lambda",
+      "label": 0,
+      "cpu": 9.28,
+      "memory": 40.52,
+      "latency": 25.62,
+      "error_rate": 0.0082,
+      "request_count": 396.3
+    },
+    {
+      "id": "lambda-2",
+      "type": "Lambda",
+      "label": 0,
+      "cpu": 21.0,
+      "memory": 34.49,
+      "latency": 59.5,
+      "error_rate": 0.017,
+      "request_count": 321.6
+    },
+    {
+      "id": "lambda-3",
+      "type": "Lambda",
+      "label": 1,
+      "cpu": 77.95,
+      "memory": 95.54,
+      "latency": 78.14,
+      "error_rate": 0.0029,
+      "request_count": 647.9
+    },
+    {
+      "id": "lambda-4",
+      "type": "Lambda",
+      "label": 0,
+      "cpu": 10.32,
+      "memory": 32.47,
+      "latency": 72.5,
+      "error_rate": 0.0132,
+      "request_count": 100.0
+    },
+    {
+      "id": "rds-0",
+      "type": "RDS",
+      "label": 0,
+      "cpu": 14.89,
+      "memory": 59.8,
+      "latency": 73.9,
+      "error_rate": 0.0077,
+      "request_count": 457.1
+    },
+    {
+      "id": "rds-1",
+      "type": "RDS",
+      "label": 0,
+      "cpu": 30.42,
+      "memory": 44.48,
+      "latency": 119.73,
+      "error_rate": 0.0022,
+      "request_count": 496.1
+    },
+    {
+      "id": "rds-2",
+      "type": "RDS",
+      "label": 0,
+      "cpu": 36.45,
+      "memory": 64.44,
+      "latency": 35.28,
+      "error_rate": 0.0024,
+      "request_count": 608.3
+    },
+    {
+      "id": "rds-3",
+      "type": "RDS",
+      "label": 0,
+      "cpu": 30.87,
+      "memory": 45.39,
+      "latency": 79.59,
+      "error_rate": 0.0052,
+      "request_count": 350.8
+    },
+    {
+      "id": "s3-0",
+      "type": "S3",
+      "label": 0,
+      "cpu": 4.87,
+      "memory": 19.14,
+      "latency": 28.81,
+      "error_rate": 0.0006,
+      "request_count": 830.9
+    },
+    {
+      "id": "s3-1",
+      "type": "S3",
+      "label": 0,
+      "cpu": 6.26,
+      "memory": 16.53,
+      "latency": 16.91,
+      "error_rate": 0.0015,
+      "request_count": 394.9
+    },
+    {
+      "id": "s3-2",
+      "type": "S3",
+      "label": 0,
+      "cpu": 1.02,
+      "memory": 15.83,
+      "latency": 30.19,
+      "error_rate": 0.0049,
+      "request_count": 757.2
+    }
+  ],
+  "edges": [
+    [
+      "ec2-0",
+      "lambda-4"
+    ],
+    [
+      "ec2-0",
+      "lambda-0"
+    ],
+    [
+      "ec2-1",
+      "lambda-2"
+    ],
+    [
+      "ec2-1",
+      "lambda-1"
+    ],
+    [
+      "ec2-2",
+      "lambda-1"
+    ],
+    [
+      "ec2-2",
+      "lambda-2"
+    ],
+    [
+      "ec2-3",
+      "lambda-1"
+    ],
+    [
+      "ec2-3",
+      "lambda-0"
+    ],
+    [
+      "ec2-4",
+      "lambda-4"
+    ],
+    [
+      "ec2-4",
+      "lambda-2"
+    ],
+    [
+      "ec2-5",
+      "lambda-3"
+    ],
+    [
+      "ec2-5",
+      "lambda-0"
+    ],
+    [
+      "ec2-6",
+      "lambda-0"
+    ],
+    [
+      "ec2-6",
+      "lambda-2"
+    ],
+    [
+      "ec2-7",
+      "lambda-2"
+    ],
+    [
+      "ec2-7",
+      "lambda-1"
+    ],
+    [
+      "lambda-0",
+      "rds-0"
+    ],
+    [
+      "lambda-1",
+      "rds-1"
+    ],
+    [
+      "lambda-2",
+      "rds-0"
+    ],
+    [
+      "lambda-3",
+      "rds-0"
+    ],
+    [
+      "lambda-4",
+      "rds-3"
+    ],
+    [
+      "lambda-0",
+      "s3-0"
+    ],
+    [
+      "lambda-1",
+      "s3-2"
+    ],
+    [
+      "lambda-2",
+      "s3-0"
+    ],
+    [
+      "lambda-3",
+      "s3-0"
+    ],
+    [
+      "lambda-4",
+      "s3-2"
+    ],
+    [
+      "rds-0",
+      "rds-1"
+    ]
+  ],
+  "labels": [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ]
+}

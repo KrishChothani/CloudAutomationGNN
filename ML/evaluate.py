@@ -28,44 +28,13 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from data_generator import generate_cloud_graph
+import os
+_script_dir   = os.path.dirname(os.path.abspath(__file__))
+_backend_root = os.path.join(_script_dir, "..", "Python-Backend")
+sys.path.insert(0, _backend_root)
 
-
-# ─── Inline model (mirror of train_gnn.py) ────────────────────────────────────
-class GraphSAGEModel(nn.Module):
-    def __init__(self, in_channels=7, hidden_channels=64, num_layers=3):
-        super().__init__()
-        self.convs = nn.ModuleList()
-        self.bns = nn.ModuleList()
-        self.convs.append(SAGEConv(in_channels, hidden_channels))
-        self.bns.append(nn.BatchNorm1d(hidden_channels))
-        for _ in range(num_layers - 2):
-            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
-            self.bns.append(nn.BatchNorm1d(hidden_channels))
-        self.convs.append(SAGEConv(hidden_channels, hidden_channels // 2))
-        self.bns.append(nn.BatchNorm1d(hidden_channels // 2))
-        self.classifier = nn.Sequential(
-            nn.Linear(hidden_channels // 2, 32),
-            nn.ReLU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(32, 1),
-            nn.Sigmoid(),
-        )
-
-    def forward(self, x, edge_index):
-        for conv, bn in zip(self.convs, self.bns):
-            x = conv(x, edge_index)
-            x = bn(x)
-            x = F.relu(x)
-        return self.classifier(x)
-
-
-def load_model(model_path: str) -> GraphSAGEModel:
-    model = GraphSAGEModel()
-    state_dict = torch.load(model_path, map_location="cpu")
-    model.load_state_dict(state_dict)
-    model.eval()
-    return model
+from app.services.gnn_model import GraphSAGE, load_model
+from data_generator import generate_nodes, generate_edges, build_pyg_data
 
 
 def print_confusion_matrix(cm: np.ndarray):
@@ -179,7 +148,9 @@ def main():
         sys.exit(1)
 
     # Load data
-    data, node_meta = generate_cloud_graph(n_nodes=args.nodes, anomaly_ratio=args.anomaly_ratio)
+    nodes = generate_nodes()
+    edges = generate_edges(nodes)
+    data = build_pyg_data(nodes, edges)
 
     # Load model
     model = load_model(args.model)
@@ -219,11 +190,11 @@ def main():
     print(classification_report(y_true, y_pred, target_names=["Normal", "Anomaly"]))
 
     print("  Per-node anomaly scores:")
-    for i, meta in enumerate(node_meta):
+    for i, meta in enumerate(nodes):
         predicted = "ANOMALY" if y_pred[i] == 1 else "normal"
-        true_label = "ANOMALY" if meta["is_anomaly"] else "normal"
+        true_label = "ANOMALY" if meta["label"] == 1 else "normal"
         match = "✓" if y_pred[i] == y_true[i] else "✗"
-        print(f"  {match} {meta['node_id']:15s} score={scores[i]:.4f}  pred={predicted:8s}  true={true_label}")
+        print(f"  {match} {meta['id']:15s} score={scores[i]:.4f}  pred={predicted:8s}  true={true_label}")
 
     # Save plots
     plot_confusion_matrix(cm, "reports/confusion_matrix.png")
