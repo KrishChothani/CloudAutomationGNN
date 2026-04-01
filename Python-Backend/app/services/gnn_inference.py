@@ -6,7 +6,7 @@ from typing import List, Tuple
 from torch_geometric.data import Data
 
 from app.core.config import get_settings
-from app.services.gnn_model import GraphSAGEModel
+from app.services.gnn_model import GraphSAGE
 from app.schemas.models import NodePrediction
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ def _score_to_severity(score: float) -> str:
 
 
 def run_inference(
-    model: GraphSAGEModel,
+    model: GraphSAGE,
     data: Data,
     node_ids: List[str],
     threshold: float = None,
@@ -34,7 +34,7 @@ def run_inference(
     Run GNN forward pass and return per-node anomaly predictions.
 
     Args:
-        model: Loaded GraphSAGEModel instance
+        model: Loaded GraphSAGE instance
         data: PyG Data object with x and edge_index
         node_ids: Ordered list of node IDs matching data.x rows
         threshold: Anomaly classification threshold (default from settings)
