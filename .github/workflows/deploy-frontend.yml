@@ -1,0 +1,62 @@
+name: Deploy Frontend to AWS S3
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-frontend:
+    name: Build & Deploy Frontend to AWS S3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: './Frontend/package-lock.json'
+
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: ./Frontend
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Get EC2 Public IP
+        id: get-ip
+        run: |
+          EC2_IP=$(aws ec2 describe-instances \
+            --instance-ids i-08b39b7c044b5005f \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          echo "ec2_ip=$EC2_IP" >> $GITHUB_OUTPUT
+
+      - name: Build Project
+        run: npm run build
+        working-directory: ./Frontend
+        env:
+          VITE_API_BASE_URL: https://480itv48ze.execute-api.ap-south-1.amazonaws.com/dev/api/v1
+          VITE_PYTHON_API_URL: http://${{ steps.get-ip.outputs.ec2_ip }}:8000
+          VITE_WS_URL: ""
+
+      
+      - name: Deploy to AWS S3 & CloudFront
+        run: |
+          aws s3 sync ./dist s3://cloud-automation-gnn-frontend-dev --delete
+          
+          # Optional: CloudFront invalidation if you set up CloudFront in front of S3
+          # aws cloudfront create-invalidation --distribution-id YOUR_CF_DIST_ID --paths "/*"
+        working-directory: ./Frontend
