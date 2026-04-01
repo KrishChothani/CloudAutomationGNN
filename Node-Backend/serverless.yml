@@ -94,21 +94,9 @@ functions:
       - http:
           path: /
           method: ANY
-          cors:
-            origin: ${env:CORS_ORIGIN, '*'}
-            headers:
-              - Content-Type
-              - Authorization
-            allowCredentials: true
       - http:
           path: /{proxy+}
           method: ANY
-          cors:
-            origin: ${env:CORS_ORIGIN, '*'}
-            headers:
-              - Content-Type
-              - Authorization
-            allowCredentials: true
 
   # ── 2. EventBridge event processor (GNN metric ingestion) ─────────────────
   eventProcessor:
