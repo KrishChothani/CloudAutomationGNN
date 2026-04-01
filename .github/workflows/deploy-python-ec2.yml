@@ -8,11 +8,63 @@ on:
       - 'Python-Backend/**'
       - '.github/workflows/deploy-python-ec2.yml'
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: false
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - fetch-ec2-info
 
 jobs:
+  # ── Standalone job: fetch EC2 info (runs when action=fetch-ec2-info) ──────────
+  fetch-ec2-info:
+    name: Fetch EC2 Instance Info
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'fetch-ec2-info' }}
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Fetch EC2 Instance Details
+        run: |
+          echo "========== EC2 Instance State =========="
+          aws ec2 describe-instances \
+            --instance-ids i-08b39b7c044b5005f \
+            --query 'Reservations[0].Instances[0].{State:State.Name,PublicIP:PublicIpAddress,PrivateIP:PrivateIpAddress,Type:InstanceType,AZ:Placement.AvailabilityZone,SG:SecurityGroups[*].GroupId}' \
+            --output table
+
+          echo ""
+          echo "========== Security Group Rules (port 80) =========="
+          SG_ID=$(aws ec2 describe-instances \
+            --instance-ids i-08b39b7c044b5005f \
+            --query 'Reservations[0].Instances[0].SecurityGroups[0].GroupId' \
+            --output text)
+          echo "Security Group ID: $SG_ID"
+          aws ec2 describe-security-groups \
+            --group-ids $SG_ID \
+            --query 'SecurityGroups[0].IpPermissions[?FromPort==`80`]' \
+            --output table
+
+          echo ""
+          echo "========== Public IP =========="
+          EC2_IP=$(aws ec2 describe-instances \
+            --instance-ids i-08b39b7c044b5005f \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          echo "Current Public IP: $EC2_IP"
+
+  # ── Main deploy job ───────────────────────────────────────────────────────────
   build-and-deploy:
     name: Build Docker Image & Deploy to EC2
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'deploy' }}
 
     steps:
       # ── 1. Checkout ───────────────────────────────────────────────────────────
@@ -132,12 +184,38 @@ jobs:
       - name: Verify health endpoint
         run: |
           EC2_IP=${{ steps.get-ip.outputs.ec2_ip }}
+          echo "Target IP: $EC2_IP"
           echo "Waiting 60s for model to load..."
           sleep 60
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${EC2_IP}/health)
-          if [ "$HTTP_STATUS" = "200" ]; then
-            echo "✅ Health check passed (HTTP $HTTP_STATUS)"
-          else
-            echo "❌ Health check failed (HTTP $HTTP_STATUS)"
-            exit 1
-          fi
+
+          # Retry up to 5 times with 20s gap
+          for i in {1..5}; do
+            echo "--- Attempt $i/5 ---"
+            HTTP_STATUS=$(curl -sv --connect-timeout 10 -o /tmp/health_response.txt \
+              -w "%{http_code}" http://${EC2_IP}/health 2>/tmp/curl_verbose.txt || echo "000")
+            echo "HTTP Status: $HTTP_STATUS"
+            cat /tmp/health_response.txt 2>/dev/null || true
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Health check passed (HTTP $HTTP_STATUS)"
+              exit 0
+            elif [ "$HTTP_STATUS" = "000" ]; then
+              echo "⚠️  Connection failed (curl exit code 7 - host unreachable)"
+              echo "Curl verbose output:"
+              cat /tmp/curl_verbose.txt 2>/dev/null || true
+            else
+              echo "⚠️  HTTP $HTTP_STATUS received"
+            fi
+            if [ $i -lt 5 ]; then
+              echo "Retrying in 20s..."
+              sleep 20
+            fi
+          done
+
+          echo "❌ Health check failed after 5 attempts"
+          echo ""
+          echo "=== Diagnostics ==="
+          echo "Instance ID: i-08b39b7c044b5005f"
+          echo "Resolved IP: $EC2_IP"
+          echo "Check: EC2 Security Group allows port 80 from 0.0.0.0/0"
+          echo "Check: Docker container is running (sudo docker ps -a)"
+          exit 1
