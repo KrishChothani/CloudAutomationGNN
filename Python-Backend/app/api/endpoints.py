@@ -7,7 +7,7 @@ from app.core.model_loader import get_model
 from app.services.gnn_model import GraphSAGE
 from app.services.graph_builder import build_graph, FEATURE_COLS
 from app.services.gnn_inference import run_inference
-from app.services.xai_service import compute_gnn_explanation, build_shap_values
+from app.services.xai_service import explain_node
 from app.services.explanation_builder import build_explanation, get_recommended_actions
 from app.schemas.models import (
     GraphInput,
@@ -19,6 +19,7 @@ from app.schemas.models import (
     GraphTopologyEdge,
     NodeFeatures,
     EdgeDefinition,
+    SHAPFeature,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,9 +135,12 @@ async def explain(
     node_idx = node_ids.index(top_pred.node_id)
     target_node = payload.nodes[node_idx]
 
-    feature_mask, affected_indices = compute_gnn_explanation(model, data, node_idx)
-    shap_values = build_shap_values(feature_mask)
-    affected_node_ids = [node_ids[i] for i in affected_indices if i < len(node_ids)]
+    xai_result = explain_node(model, data, node_idx)
+    shap_values = [
+        SHAPFeature(feature=k, value=v)
+        for k, v in xai_result["feature_importance"].items()
+    ]
+    affected_node_ids = xai_result["important_nodes"]
 
     explanation_text = build_explanation(
         node_id=top_pred.node_id,
