@@ -15,7 +15,7 @@ const app = express()
 
 // ─── Middlewares ──────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(','),
+  origin: "http://cloud-automation-gnn-frontend-dev.s3-website.ap-south-1.amazonaws.com",
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

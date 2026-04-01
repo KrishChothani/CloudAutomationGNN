@@ -94,9 +94,51 @@ functions:
       - http:
           path: /
           method: ANY
+          cors:
+            origin: ${env:CORS_ORIGIN, '*'}
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Origin
+              - Access-Control-Allow-Credentials
+              - Set-Cookie
+              - Cookie
+            allowCredentials: true
+            methods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
       - http:
           path: /{proxy+}
           method: ANY
+          cors:
+            origin: ${env:CORS_ORIGIN, '*'}
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Origin
+              - Access-Control-Allow-Credentials
+              - Set-Cookie
+              - Cookie
+            allowCredentials: true
+            methods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
 
   # ── 2. EventBridge event processor (GNN metric ingestion) ─────────────────
   eventProcessor:
