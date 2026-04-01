@@ -1,0 +1,163 @@
+/*
+ * index.css
+ * ─────────
+ * Global design system for CloudAutomationGNN Frontend (Tailwind CSS v3).
+ *
+ * Structure:
+ *   1. Google Fonts import (Inter + JetBrains Mono)
+ *   2. Tailwind v3 directives (@tailwind base/components/utilities)
+ *   3. CSS custom properties (design tokens: colours, gradients, shadows)
+ *   4. @layer base   — html/body reset, scrollbar styles
+ *   5. @layer components — .glass-card, .btn-primary, .input-field, .app-layout
+ *   6. @layer utilities  — animation keyframes, custom utilities
+ *
+ * ALL component-level styling uses Tailwind utility classes + these CSS variables.
+ * No component-specific styles live here — they belong in their JSX files.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design tokens ──────────────────────────────────────────────────────────── */
+:root {
+  --bg-primary:      #0a0e1a;
+  --bg-secondary:    #0f1629;
+  --bg-card:         #111827;
+  --bg-hover:        #1a2235;
+
+  --accent-indigo:   #6366f1;
+  --accent-purple:   #8b5cf6;
+  --accent-cyan:     #06b6d4;
+  --accent-green:    #10b981;
+  --accent-orange:   #f97316;
+  --accent-red:      #ef4444;
+
+  --text-primary:    #f8fafc;
+  --text-secondary:  #cbd5e1;
+  --text-muted:      #64748b;
+
+  --border-subtle:   rgba(99, 102, 241, 0.15);
+  --border-glow:     rgba(99, 102, 241, 0.40);
+
+  --gradient-primary:
+    linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+
+  --gradient-mesh:
+    radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(6, 182, 212, 0.08)  0%, transparent 50%);
+
+  --shadow-card:
+    0 4px 6px -1px rgba(0, 0, 0, 0.4),
+    0 2px 4px -2px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-primary);
+    background-image: var(--gradient-mesh);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.25);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.45); }
+}
+
+/* ─── Components ─────────────────────────────────────────────────────────────── */
+@layer components {
+  .glass-card {
+    background:      rgba(17, 24, 39, 0.80);
+    border:          1px solid var(--border-subtle);
+    border-radius:   1rem;
+    box-shadow:      var(--shadow-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .btn-primary {
+    background:    linear-gradient(135deg, #6366f1, #8b5cf6);
+    color:         #f8fafc;
+    border:        none;
+    border-radius: 0.75rem;
+    cursor:        pointer;
+    font-weight:   700;
+    font-size:     0.875rem;
+    transition:    all 0.2s ease;
+    box-shadow:    0 4px 15px rgba(99, 102, 241, 0.35);
+  }
+  .btn-primary:hover {
+    transform:  translateY(-1px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+    filter:     brightness(1.08);
+  }
+  .btn-primary:active { transform: translateY(0); }
+
+  .input-field {
+    width:         100%;
+    padding:       0.625rem 1rem;
+    background:    rgba(255, 255, 255, 0.04);
+    border:        1px solid var(--border-subtle);
+    border-radius: 0.75rem;
+    color:         var(--text-primary);
+    font-size:     0.875rem;
+    outline:       none;
+    transition:    border-color 0.2s, box-shadow 0.2s;
+    font-family:   'Inter', sans-serif;
+  }
+  .input-field:focus {
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow:   0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
+  .input-field::placeholder { color: var(--text-muted); }
+
+  .app-layout    { display: flex; min-height: 100vh; }
+  .main-content  {
+    flex:         1;
+    overflow-y:   auto;
+    padding:      2rem;
+    min-width:    0;
+    background-color: var(--bg-primary);
+    background-image: var(--gradient-mesh);
+    background-attachment: fixed;
+  }
+}
+
+/* ─── Utilities / Animations ─────────────────────────────────────────────────── */
+@layer utilities {
+  @keyframes fadeUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .animate-fade-up {
+    animation: fadeUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  @keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+  .animate-slide-in-right {
+    animation: slideInRight 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+}

@@ -1,0 +1,27 @@
+# CloudAutomationGNN Python Backend Requirements
+# Python 3.11
+
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# PyTorch & PyTorch Geometric
+torch==2.4.0
+torch-geometric==2.6.1
+# Install these separately with CUDA if needed:
+# torch-scatter, torch-sparse, torch-cluster, torch-spline-conv
+
+# Explainability
+captum==0.7.0
+shap==0.46.0
+
+# AWS
+boto3==1.35.0
+
+# Utilities
+numpy==1.26.4
+scikit-learn==1.5.2
+python-dotenv==1.0.1
+httpx==0.27.2

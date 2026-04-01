@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment variables (Sensitive data)
+.env
+.env.local
+.env.*
+
+# Node (if present)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Serverless / Lambda artifacts (since we are Dockerizing)
+.serverless/
+package.json
+package-lock.json
+handler.py
+
+# Docker
+Dockerfile
+.dockerignore
+
+# IDEs
+.vscode/
+.idea/

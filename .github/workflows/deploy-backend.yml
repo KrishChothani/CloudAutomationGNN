@@ -1,0 +1,57 @@
+name: Deploy Node.js Backend (Serverless)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Node-Backend/**'        # Only run if files in the Node-Backend directory change
+      - '.github/workflows/**'   # Or if this pipeline file changes
+
+jobs:
+  deploy:
+    name: Deploy to AWS Lambda
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: Node-Backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Node-Backend/package-lock.json
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Serverless Framework globally
+        run: npm install -g serverless
+
+      # Note: We pass the environment variables required by your serverless.yml
+      # directly into the deploy step from GitHub Actions Secrets.
+      - name: Serverless Deploy
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
+          REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
+          CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
+          PYTHON_SERVICE_URL: ${{ secrets.PYTHON_SERVICE_URL }}
+          SNS_TOPIC_ARN: ${{ secrets.SNS_TOPIC_ARN }}
+          ACCESS_TOKEN_EXPIRY: ${{ secrets.ACCESS_TOKEN_EXPIRY }}
+          REFRESH_TOKEN_EXPIRY: ${{ secrets.REFRESH_TOKEN_EXPIRY }}
+          DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE }}
+        run: serverless deploy --stage prod

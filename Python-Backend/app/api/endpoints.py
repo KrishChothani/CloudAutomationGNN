@@ -1,0 +1,161 @@
+import time
+import logging
+from typing import List
+from fastapi import APIRouter, HTTPException, Depends
+
+from app.core.model_loader import get_model
+# from app.services.gnn_model import GraphSAGEModel
+from app.services.gnn_model import GraphSAGE
+from app.services.graph_builder import build_graph, metrics_dict_to_node_features, FEATURE_NAMES
+from app.services.gnn_inference import run_inference
+from app.services.xai_service import compute_gnn_explanation, build_shap_values
+from app.services.explanation_builder import build_explanation, get_recommended_actions
+from app.schemas.models import (
+    GraphInput,
+    SingleNodeInput,
+    PredictResponse,
+    ExplainResponse,
+    GraphTopologyResponse,
+    GraphTopologyNode,
+    GraphTopologyEdge,
+    NodeFeatures,
+    EdgeDefinition,
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+# ─── POST /predict ─────────────────────────────────────────────────────────────
+@router.post("/predict", response_model=PredictResponse)
+async def predict(
+    payload: GraphInput,
+    model: GraphSAGEModel = Depends(get_model),
+):
+    """Run GNN inference over a full graph payload."""
+    if not payload.nodes:
+        raise HTTPException(status_code=400, detail="nodes list cannot be empty")
+
+    data = build_graph(payload.nodes, payload.edges)
+    node_ids = [n.node_id for n in payload.nodes]
+
+    predictions, elapsed_ms = run_inference(model, data, node_ids)
+    anomaly_count = sum(1 for p in predictions if p.is_anomaly)
+
+    return PredictResponse(
+        graph_id=payload.graph_id,
+        predictions=predictions,
+        anomaly_count=anomaly_count,
+        processing_time_ms=round(elapsed_ms, 2),
+    )
+
+
+# ─── POST /predict/single ──────────────────────────────────────────────────────
+@router.post("/predict/single")
+async def predict_single(
+    payload: SingleNodeInput,
+    model: GraphSAGEModel = Depends(get_model),
+):
+    """Predict anomaly for a single node (no graph context — uses self-loop)."""
+    node = metrics_dict_to_node_features(payload.resource_id, payload.resource_type, payload.metrics)
+    data = build_graph([node], [])  # No edges → self-loop added in inference
+    predictions, elapsed_ms = run_inference(model, data, [payload.resource_id])
+
+    pred = predictions[0]
+    return {
+        "event_id": payload.event_id,
+        "node_id": pred.node_id,
+        "anomaly_score": pred.anomaly_score,
+        "is_anomaly": pred.is_anomaly,
+        "severity": pred.severity,
+        "processing_time_ms": round(elapsed_ms, 2),
+    }
+
+
+# ─── POST /explain ─────────────────────────────────────────────────────────────
+@router.post("/explain", response_model=ExplainResponse)
+async def explain(
+    payload: GraphInput,
+    model: GraphSAGEModel = Depends(get_model),
+):
+    """Generate XAI explanation for the highest-scoring anomaly node."""
+    if not payload.nodes:
+        raise HTTPException(status_code=400, detail="nodes list cannot be empty")
+
+    data = build_graph(payload.nodes, payload.edges)
+    node_ids = [n.node_id for n in payload.nodes]
+
+    predictions, _ = run_inference(model, data, node_ids)
+
+    # Find node with highest anomaly score
+    top_pred = max(predictions, key=lambda p: p.anomaly_score)
+    node_idx = node_ids.index(top_pred.node_id)
+    target_node = payload.nodes[node_idx]
+
+    feature_mask, affected_indices = compute_gnn_explanation(model, data, node_idx)
+    shap_values = build_shap_values(feature_mask)
+    affected_node_ids = [node_ids[i] for i in affected_indices if i < len(node_ids)]
+
+    explanation_text = build_explanation(
+        node_id=top_pred.node_id,
+        node_type=target_node.node_type,
+        score=top_pred.anomaly_score,
+        shap_values=shap_values,
+        affected_node_ids=affected_node_ids,
+        severity=top_pred.severity,
+    )
+    recommended_actions = get_recommended_actions(top_pred.severity)
+
+    return ExplainResponse(
+        anomaly_id=payload.graph_id,
+        node_id=top_pred.node_id,
+        anomaly_score=top_pred.anomaly_score,
+        shap_values=shap_values,
+        affected_nodes=affected_node_ids,
+        explanation=explanation_text,
+        recommended_actions=recommended_actions,
+    )
+
+
+# ─── GET /graph ────────────────────────────────────────────────────────────────
+@router.get("/graph", response_model=GraphTopologyResponse)
+async def get_graph_topology(model: GraphSAGEModel = Depends(get_model)):
+    """Return the current cloud graph topology with anomaly scores for live visualization."""
+    # Synthetic demo topology — replace with DB fetch in production
+    nodes_raw = [
+        NodeFeatures(node_id="ec2-1", node_type="ec2", cpu_usage=85, memory_usage=72, disk_usage=45, network_in=120, network_out=80, error_rate=2.1, latency=210),
+        NodeFeatures(node_id="ec2-2", node_type="ec2", cpu_usage=42, memory_usage=55, disk_usage=30, network_in=60, network_out=40, error_rate=0.5, latency=85),
+        NodeFeatures(node_id="rds-1", node_type="rds", cpu_usage=91, memory_usage=88, disk_usage=65, network_in=200, network_out=150, error_rate=3.2, latency=450),
+        NodeFeatures(node_id="lambda-1", node_type="lambda", cpu_usage=18, memory_usage=30, disk_usage=5, network_in=20, network_out=15, error_rate=0.1, latency=45),
+        NodeFeatures(node_id="lambda-2", node_type="lambda", cpu_usage=95, memory_usage=78, disk_usage=10, network_in=300, network_out=250, error_rate=8.5, latency=900),
+        NodeFeatures(node_id="elb-1", node_type="elb", cpu_usage=60, memory_usage=45, disk_usage=20, network_in=500, network_out=480, error_rate=1.2, latency=120),
+    ]
+    edges_raw = [
+        EdgeDefinition(source="elb-1", target="ec2-1"),
+        EdgeDefinition(source="elb-1", target="ec2-2"),
+        EdgeDefinition(source="ec2-1", target="rds-1"),
+        EdgeDefinition(source="ec2-2", target="rds-1"),
+        EdgeDefinition(source="ec2-1", target="lambda-1"),
+        EdgeDefinition(source="ec2-2", target="lambda-2"),
+    ]
+
+    data = build_graph(nodes_raw, edges_raw)
+    node_ids = [n.node_id for n in nodes_raw]
+    predictions, _ = run_inference(model, data, node_ids)
+    pred_map = {p.node_id: p for p in predictions}
+
+    topology_nodes = [
+        GraphTopologyNode(
+            id=n.node_id,
+            label=f"{n.node_type.upper()}-{n.node_id.split('-')[1]}",
+            node_type=n.node_type,
+            cpu_usage=n.cpu_usage,
+            is_anomaly=pred_map[n.node_id].is_anomaly,
+            anomaly_score=pred_map[n.node_id].anomaly_score,
+        )
+        for n in nodes_raw
+    ]
+
+    topology_edges = [GraphTopologyEdge(source=e.source, target=e.target) for e in edges_raw]
+
+    return GraphTopologyResponse(nodes=topology_nodes, edges=topology_edges)
