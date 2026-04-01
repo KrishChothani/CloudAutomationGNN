@@ -1,0 +1,120 @@
+name: Build and Deploy Python GNN Service to EC2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Python-Backend/**'
+      - '.github/workflows/deploy-python-ec2.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    name: Build Docker Image & Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ───────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Docker Buildx ─────────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 3. Login to Docker Hub ───────────────────────────────────────────────
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # ── 4. Build & Push image ────────────────────────────────────────────────
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Python-Backend
+          file: ./Python-Backend/Dockerfile
+          push: true
+          no-cache: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/cloud-automation-gnn-python:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/cloud-automation-gnn-python:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/cloud-automation-gnn-python:buildcache,mode=max
+
+      # ── 5. Configure AWS credentials ─────────────────────────────────────────
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      # ── 6. Resolve EC2 public IP dynamically ─────────────────────────────────
+      - name: Get EC2 Public IP
+        id: get-ip
+        run: |
+          EC2_IP=$(aws ec2 describe-instances \
+            --instance-ids i-08b39b7c044b5005f \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          echo "ec2_ip=$EC2_IP" >> $GITHUB_OUTPUT
+          echo "Resolved EC2 IP: $EC2_IP"
+
+      # ── 7. SSH into EC2 and deploy container ─────────────────────────────────
+      - name: Deploy and restart Docker container on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.get-ip.outputs.ec2_ip }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Login to Docker Hub
+            echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            # Stop and remove old container (ignore errors if not running)
+            sudo docker stop cloud-automation-gnn-python || true
+            sudo docker rm cloud-automation-gnn-python || true
+
+            # Free up disk space by removing unused images
+            sudo docker image prune -af
+
+            # Pull the latest image
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/cloud-automation-gnn-python:latest
+
+            # Write environment file (overwrites on each deploy)
+            cat > ~/.env << 'EOF'
+            AWS_REGION=ap-south-1
+            MODEL_BUCKET=cloud-automation-gnn-models-dev
+            MODEL_KEY=models/gnn_model.pt
+            NODE_BACKEND_URL=https://480itv48ze.execute-api.ap-south-1.amazonaws.com/dev
+            DYNAMODB_ANOMALY_TABLE=cloud-automation-gnn-dev-anomalies
+            DYNAMODB_LOG_TABLE=cloud-automation-gnn-dev-automation-logs
+            SQS_QUEUE_URL=https://sqs.ap-south-1.amazonaws.com/670467382559/cloud-automation-gnn-dev-event-queue
+            EOF
+
+            # Run container with env file, restart policy, and port binding
+            sudo docker run -d \
+              --name cloud-automation-gnn-python \
+              --restart unless-stopped \
+              -p 80:8000 \
+              --env-file ~/.env \
+              ${{ secrets.DOCKER_USERNAME }}/cloud-automation-gnn-python:latest
+
+            # Tail logs briefly to confirm startup
+            sleep 5
+            sudo docker logs --tail 30 cloud-automation-gnn-python
+
+      # ── 8. Verify health endpoint ─────────────────────────────────────────────
+      - name: Verify health endpoint
+        run: |
+          EC2_IP=${{ steps.get-ip.outputs.ec2_ip }}
+          echo "Waiting 60s for model to load..."
+          sleep 60
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${EC2_IP}/health)
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ Health check passed (HTTP $HTTP_STATUS)"
+          else
+            echo "❌ Health check failed (HTTP $HTTP_STATUS)"
+            exit 1
+          fi
