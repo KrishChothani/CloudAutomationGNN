@@ -257,6 +257,52 @@ resource "aws_cloudwatch_log_group" "event_processor_logs" {
 }
 
 ###############################################################################
+# S3 — Frontend Hosting Bucket
+###############################################################################
+resource "aws_s3_bucket" "frontend_bucket" {
+  bucket = "cloud-automation-gnn-frontend-${var.environment}"
+}
+
+resource "aws_s3_bucket_public_access_block" "frontend_bucket_acl" {
+  bucket                  = aws_s3_bucket.frontend_bucket.id
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
+  bucket = aws_s3_bucket.frontend_bucket.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.frontend_bucket.arn}/*"
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.frontend_bucket_acl]
+}
+
+resource "aws_s3_bucket_website_configuration" "frontend_website" {
+  bucket = aws_s3_bucket.frontend_bucket.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "index.html"
+  }
+}
+
+###############################################################################
 # Outputs
 ###############################################################################
 output "sqs_queue_url" {
@@ -282,6 +328,16 @@ output "dynamodb_log_table" {
 output "model_bucket_name" {
   description = "S3 model bucket name"
   value       = aws_s3_bucket.model_bucket.bucket
+}
+
+output "frontend_bucket_name" {
+  description = "S3 frontend hosting bucket name"
+  value       = aws_s3_bucket.frontend_bucket.bucket
+}
+
+output "frontend_website_url" {
+  description = "URL of the static frontend website"
+  value       = aws_s3_bucket_website_configuration.frontend_website.website_endpoint
 }
 
 output "eventbridge_rule_name" {
