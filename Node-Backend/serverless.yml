@@ -118,6 +118,7 @@ functions:
             detail-type:
               - 'CloudMetricEvent'
               - 'CloudWatch Alarm State Change'
+      # Also triggered by SQS for batch ingestion
       - sqs:
           arn: !Sub 'arn:aws:sqs:${self:provider.region}:*:cloud-automation-gnn-event-queue-${self:provider.stage}'
           batchSize: 10
@@ -132,3 +133,19 @@ custom:
     httpPort: 5000
     lambdaPort: 5010
     reloadHandler: true
+
+  # serverless-dotenv-plugin config
+  dotenv:
+    path: ./.env
+    required:
+      file: false       # don't fail if .env doesn't exist in CI
+    include:
+      - MONGODB_URI
+      - ACCESS_TOKEN_SECRET
+      - REFRESH_TOKEN_SECRET
+      - CORS_ORIGIN
+      - PYTHON_SERVICE_URL
+      - SNS_TOPIC_ARN
+      - ACCESS_TOKEN_EXPIRY
+      - REFRESH_TOKEN_EXPIRY
+      - DYNAMODB_TABLE
