@@ -172,7 +172,7 @@ jobs:
             sudo docker run -d \
               --name cloud-automation-gnn-python \
               --restart unless-stopped \
-              -p 80:8000 \
+              -p 8000:8000 \
               --env-file ~/.env \
               ${{ secrets.DOCKER_USERNAME }}/cloud-automation-gnn-python:latest
 
