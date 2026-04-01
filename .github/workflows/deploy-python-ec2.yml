@@ -102,6 +102,20 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
+      # ── 5.5. Open Port 8000 ──────────────────────────────────────────────────
+      - name: Ensure Port 8000 is Open
+        run: |
+          SG_ID=$(aws ec2 describe-instances \
+            --instance-ids i-08b39b7c044b5005f \
+            --query 'Reservations[0].Instances[0].SecurityGroups[0].GroupId' \
+            --output text)
+          echo "Authorizing port 8000 on SG: $SG_ID"
+          aws ec2 authorize-security-group-ingress \
+            --group-id $SG_ID \
+            --protocol tcp \
+            --port 8000 \
+            --cidr 0.0.0.0/0 2>/dev/null || echo "Rule already exists or failed"
+
       # ── 6. Resolve EC2 public IP dynamically ─────────────────────────────────
       - name: Get EC2 Public IP
         id: get-ip
@@ -195,7 +209,7 @@ jobs:
           for i in {1..5}; do
             echo "--- Attempt $i/5 ---"
             HTTP_STATUS=$(curl -sv --connect-timeout 10 -o /tmp/health_response.txt \
-              -w "%{http_code}" http://${EC2_IP}/health 2>/tmp/curl_verbose.txt || echo "000")
+              -w "%{http_code}" http://${EC2_IP}:8000/health 2>/tmp/curl_verbose.txt || echo "000")
             echo "HTTP Status: $HTTP_STATUS"
             cat /tmp/health_response.txt 2>/dev/null || true
             if [ "$HTTP_STATUS" = "200" ]; then
