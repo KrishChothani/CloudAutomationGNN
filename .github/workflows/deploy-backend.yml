@@ -38,9 +38,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Serverless Framework globally
-        run: npm install -g serverless
-
       # Note: We pass the environment variables required by your serverless.yml
       # directly into the deploy step from GitHub Actions Secrets.
       - name: Serverless Deploy
@@ -54,4 +51,4 @@ jobs:
           ACCESS_TOKEN_EXPIRY: ${{ secrets.ACCESS_TOKEN_EXPIRY }}
           REFRESH_TOKEN_EXPIRY: ${{ secrets.REFRESH_TOKEN_EXPIRY }}
           DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE }}
-        run: serverless deploy --stage prod
+        run: npx serverless deploy --stage prod --verbose
