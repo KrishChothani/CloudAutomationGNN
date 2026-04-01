@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     LOCAL_MODEL_PATH: str = "./models/gnn_model.pt"
 
     # GNN config
-    NODE_FEATURES: int = 7
+    NODE_FEATURES: int = 5
     HIDDEN_CHANNELS: int = 64
     NUM_LAYERS: int = 3
     ANOMALY_THRESHOLD: float = 0.5

@@ -34,7 +34,7 @@ def _load_from_disk(path: Path) -> GraphSAGE:
     model = GraphSAGE(
         input_dim=settings.NODE_FEATURES,
     )
-    state_dict = torch.load(str(path), map_location="cpu")
+    state_dict = torch.load(str(path), map_location="cpu", weights_only=True)
     model.load_state_dict(state_dict)
     model.eval()
     return model
