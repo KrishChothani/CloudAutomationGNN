@@ -107,7 +107,7 @@ functions:
     timeout: 60
     events:
       - eventBridge:
-          name: cloud-metrics-rule
+          name: cloud-metrics-rule-${self:provider.stage}
           description: 'Triggers on cloud infrastructure metric change events'
           eventBus: default
           pattern:
