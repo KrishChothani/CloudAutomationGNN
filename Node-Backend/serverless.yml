@@ -62,6 +62,17 @@ provider:
             - !Sub 'arn:aws:events:${self:provider.region}:*:event-bus/default'
             - !Sub 'arn:aws:events:${self:provider.region}:*:rule/cloud-metrics-rule'
 
+        # ── SQS: consume event queue ──────────────────────────────────────
+        - Effect: Allow
+          Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+            - sqs:ChangeMessageVisibility
+            - sqs:GetQueueUrl
+          Resource:
+            - !GetAtt CloudAutomationEventQueue.Arn
+
         # ── CloudWatch Logs ─────────────────────────────────────────────────
         - Effect: Allow
           Action:
@@ -120,7 +131,7 @@ functions:
               - 'CloudWatch Alarm State Change'
       # Also triggered by SQS for batch ingestion
       - sqs:
-          arn: 'arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-event-queue-${self:provider.stage}'
+          arn: !GetAtt CloudAutomationEventQueue.Arn
           batchSize: 10
           maximumBatchingWindow: 30
           functionResponseType: ReportBatchItemFailures
@@ -167,3 +178,36 @@ package:
     - '!coverage/**'
     - '!scripts/**'
     - '!docs/**'
+
+resources:
+  Resources:
+
+    # Dead-letter queue must be created first (referenced by main queue's RedrivePolicy)
+    CloudAutomationEventDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: 'cloud-automation-gnn-event-queue-${self:provider.stage}-dlq'
+        MessageRetentionPeriod: 1209600   # 14 days
+
+    # Main event queue consumed by the eventProcessor Lambda
+    CloudAutomationEventQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: 'cloud-automation-gnn-event-queue-${self:provider.stage}'
+        VisibilityTimeout: 300            # >= Lambda timeout (60 s) * 5
+        MessageRetentionPeriod: 86400     # 1 day
+        ReceiveMessageWaitTimeSeconds: 20 # long-polling
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CloudAutomationEventDLQ.Arn
+          maxReceiveCount: 3
+
+  Outputs:
+    EventQueueUrl:
+      Description: URL of the SQS event ingestion queue
+      Value: !Ref CloudAutomationEventQueue
+    EventQueueArn:
+      Description: ARN of the SQS event ingestion queue
+      Value: !GetAtt CloudAutomationEventQueue.Arn
+    EventDLQArn:
+      Description: ARN of the SQS dead-letter queue
+      Value: !GetAtt CloudAutomationEventDLQ.Arn
