@@ -177,7 +177,7 @@ jobs:
             AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             MPLCONFIGDIR=/tmp/matplotlib
-            MODEL_BUCKET=cloud-automation-gnn-models-dev
+            MODEL_BUCKET=cloud-automation-gnn-models
             MODEL_KEY=models/gnn_model.pt
             NODE_BACKEND_URL=https://480itv48ze.execute-api.ap-south-1.amazonaws.com/dev
             DYNAMODB_ANOMALY_TABLE=cloud-automation-gnn-dev-anomalies

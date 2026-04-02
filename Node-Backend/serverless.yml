@@ -8,19 +8,19 @@ provider:
   name: aws
   runtime: nodejs20.x
   region: ap-south-1
-  stage: ${opt:stage, 'dev'}
+  stage: dev
   memorySize: 512
   timeout: 29
   logRetentionInDays: 14
 
   environment:
     MONGODB_URI:            ${env:MONGODB_URI}
-    CORS_ORIGIN:            ${env:CORS_ORIGIN, 'http://localhost:5173'}
+    CORS_ORIGIN:            ${env:CORS_ORIGIN}
     ACCESS_TOKEN_SECRET:    ${env:ACCESS_TOKEN_SECRET}
     ACCESS_TOKEN_EXPIRY:    ${env:ACCESS_TOKEN_EXPIRY, '15m'}
     REFRESH_TOKEN_SECRET:   ${env:REFRESH_TOKEN_SECRET}
     REFRESH_TOKEN_EXPIRY:   ${env:REFRESH_TOKEN_EXPIRY, '7d'}
-    PYTHON_SERVICE_URL:     ${env:PYTHON_SERVICE_URL, 'http://localhost:8000'}
+    PYTHON_SERVICE_URL:     ${env:PYTHON_SERVICE_URL}
     SNS_TOPIC_ARN:          ${env:SNS_TOPIC_ARN, ''}
     DYNAMODB_TABLE:         ${env:DYNAMODB_TABLE, 'cloud-automation-gnn-${self:provider.stage}'}
     AWS_REGION_NAME:        ${self:provider.region}
@@ -216,14 +216,14 @@ resources:
     CloudAutomationEventDLQ:
       Type: AWS::SQS::Queue
       Properties:
-        QueueName: 'cloud-automation-gnn-event-queue-${self:provider.stage}-dlq'
+        QueueName: 'cloud-automation-gnn-${self:provider.stage}-event-dlq'
         MessageRetentionPeriod: 1209600   # 14 days
 
     # Main event queue consumed by the eventProcessor Lambda
     CloudAutomationEventQueue:
       Type: AWS::SQS::Queue
       Properties:
-        QueueName: 'cloud-automation-gnn-event-queue-${self:provider.stage}'
+        QueueName: 'cloud-automation-gnn-${self:provider.stage}-event-queue'
         VisibilityTimeout: 300            # >= Lambda timeout (60 s) * 5
         MessageRetentionPeriod: 86400     # 1 day
         ReceiveMessageWaitTimeSeconds: 20 # long-polling
