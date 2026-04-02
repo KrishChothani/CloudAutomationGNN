@@ -3,6 +3,9 @@ import { ApiError } from '../Utils/ApiError.js'
 import { ApiResponse } from '../Utils/ApiResponse.js'
 import Anomaly from '../Models/anomaly.model.js'
 import axios from 'axios'
+import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch'
+
+const cwClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'ap-south-1' })
 
 const PYTHON_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000'
 
@@ -28,6 +31,32 @@ function toAlertShape(anomaly) {
     actionStatus: anomaly.actionStatus ? anomaly.actionStatus.toUpperCase() : 'PENDING',
     resolved:     anomaly.resolved     ?? false,
     region:       anomaly.region       || 'ap-south-1',
+  }
+}
+
+/** Dynamically fetch real CloudWatch Alarms straight from AWS */
+async function fetchDirectAwsAlarms() {
+  try {
+    const data = await cwClient.send(new DescribeAlarmsCommand({ StateValue: 'ALARM' }))
+    const alarms = data.MetricAlarms || []
+    
+    return alarms.map(alarm => ({
+      id:           `aws-alarm-${alarm.AlarmName.replace(/\s+/g, '-')}`,
+      resourceName: alarm.Namespace || 'AWS Resource',
+      resourceType: 'CloudWatch Alert',
+      cause:        alarm.AlarmDescription || alarm.StateReason || 'AWS CloudWatch Alarm Triggered',
+      anomalyScore: 1.0, 
+      severity:     'CRITICAL',
+      timestamp:    alarm.StateUpdatedTimestamp || new Date(),
+      actionStatus: 'PENDING',
+      resolved:     false,
+      region:       process.env.AWS_REGION || 'ap-south-1',
+    }))
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('⚠️ Could not fetch direct AWS Alarms. Is AWS_ACCESS_KEY_ID configured?', err.message)
+    }
+    return [] // Return empty array if no AWS perms
   }
 }
 
@@ -77,16 +106,24 @@ export const getAnomalies = asyncHandler(async (req, res) => {
     })
   }
 
-  const data = rawAnomalies.map(toAlertShape)
+  // Map DB anomalies
+  let data = rawAnomalies.map(toAlertShape)
+
+  // 🚀 FETCH DIRECTLY FROM AWS
+  const activeAwsAlarms = await fetchDirectAwsAlarms()
+  
+  // Merge the real AWS Alarms with our GNN database anomalies
+  data = [...activeAwsAlarms, ...data]
+  const combinedTotal = total + activeAwsAlarms.length
 
   return res.status(200).json(
     new ApiResponse(200, {
       data,
-      total,
+      total: combinedTotal,
       page:  parseInt(page),
       limit: parseInt(limit),
-      pages: Math.ceil(total / parseInt(limit)),
-    }, 'Anomalies fetched')
+      pages: Math.ceil(combinedTotal / parseInt(limit)),
+    }, 'Anomalies fetched directly from DB + AWS')
   )
 })
 
