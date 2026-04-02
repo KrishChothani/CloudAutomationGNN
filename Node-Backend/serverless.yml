@@ -170,6 +170,7 @@ plugins:
   - serverless-esbuild
   - serverless-offline
 
+
 custom:
   serverless-offline:
     httpPort: 5000
@@ -181,15 +182,10 @@ custom:
     minify: false          # keep readable for Lambda logs/debugging
     sourcemap: true        # enables proper stack traces in CloudWatch
     target: node20         # matches provider.runtime
+    exclude: ['aws-sdk']
+    define:
+      'require.resolve': undefined
     platform: node
-    format: esm            # matches "type": "module" in package.json
-    outputFileExtension: .mjs
-    packager: npm
-    exclude:               # already bundled by AWS Lambda runtime
-      - '@aws-sdk/*'
-    keepOutputDirectory: false
-
-
 
 package:
   patterns:
