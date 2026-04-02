@@ -71,7 +71,7 @@ provider:
             - sqs:ChangeMessageVisibility
             - sqs:GetQueueUrl
           Resource:
-            - !GetAtt CloudAutomationEventQueue.Arn
+            - arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-${self:provider.stage}-event-queue
 
         # ── CloudWatch Logs ─────────────────────────────────────────────────
         - Effect: Allow
@@ -161,7 +161,7 @@ functions:
               - 'CloudWatch Alarm State Change'
       # Also triggered by SQS for batch ingestion
       - sqs:
-          arn: !GetAtt CloudAutomationEventQueue.Arn
+          arn: arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-${self:provider.stage}-event-queue
           batchSize: 10
           maximumBatchingWindow: 30
           functionResponseType: ReportBatchItemFailures
@@ -208,36 +208,3 @@ package:
     - '!coverage/**'
     - '!scripts/**'
     - '!docs/**'
-
-resources:
-  Resources:
-
-    # Dead-letter queue must be created first (referenced by main queue's RedrivePolicy)
-    CloudAutomationEventDLQ:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: 'cloud-automation-gnn-${self:provider.stage}-event-dlq'
-        MessageRetentionPeriod: 1209600   # 14 days
-
-    # Main event queue consumed by the eventProcessor Lambda
-    CloudAutomationEventQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: 'cloud-automation-gnn-${self:provider.stage}-event-queue'
-        VisibilityTimeout: 300            # >= Lambda timeout (60 s) * 5
-        MessageRetentionPeriod: 86400     # 1 day
-        ReceiveMessageWaitTimeSeconds: 20 # long-polling
-        RedrivePolicy:
-          deadLetterTargetArn: !GetAtt CloudAutomationEventDLQ.Arn
-          maxReceiveCount: 3
-
-  Outputs:
-    EventQueueUrl:
-      Description: URL of the SQS event ingestion queue
-      Value: !Ref CloudAutomationEventQueue
-    EventQueueArn:
-      Description: ARN of the SQS event ingestion queue
-      Value: !GetAtt CloudAutomationEventQueue.Arn
-    EventDLQArn:
-      Description: ARN of the SQS dead-letter queue
-      Value: !GetAtt CloudAutomationEventDLQ.Arn
