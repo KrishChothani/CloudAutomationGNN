@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { MdClose, MdMemory, MdStorage, MdSpeed, MdWifi, MdErrorOutline, MdCheckCircle } from 'react-icons/md'
+import apiClient from '../../services/apiClient.js'
 
 const METRIC_ICONS = {
   cpu: MdSpeed,
@@ -31,18 +32,44 @@ function MetricBar({ label, value, max = 100, unit = '%', color }) {
 }
 
 export default function NodeDetailModal({ node, onClose }) {
+  const [metrics, setMetrics] = useState(null)
+
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose?.() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
+  useEffect(() => {
+    if (!node) return;
+    
+    let isMounted = true;
+    const fetchMetrics = async () => {
+      try {
+        const response = await apiClient.get(`/events?resourceId=${node.id}&limit=1`)
+        if (isMounted && response.data?.data?.events?.length > 0) {
+          setMetrics(response.data.data.events[0].metrics)
+        }
+      } catch (error) {
+        console.error("Failed to fetch node metrics:", error)
+      }
+    }
+
+    fetchMetrics()
+    const intervalId = setInterval(fetchMetrics, 5000) // Poll every 5s for real-time
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId)
+    }
+  }, [node])
+
   if (!node) return null
 
-  const fakeCPU = node.cpuUsage || Math.round(Math.random() * 80 + 10)
-  const fakeMemory = Math.round(Math.random() * 60 + 30)
-  const fakeDisk = Math.round(Math.random() * 70 + 15)
-  const fakeNetwork = Math.round(Math.random() * 500 + 50)
+  const cpu = metrics?.cpuUsage ?? node.cpuUsage ?? 0
+  const memory = metrics?.memoryUsage ?? 0
+  const disk = metrics?.diskUsage ?? 0
+  const networkBits = ((metrics?.networkIn || 0) + (metrics?.networkOut || 0)) * 8
+  const networkMbps = metrics ? (networkBits / 1000000).toFixed(2) : 0
 
   const typeConfig = {
     ec2: { label: 'EC2 Instance', color: '#6366f1' },
@@ -106,12 +133,12 @@ export default function NodeDetailModal({ node, onClose }) {
 
           {/* Metrics */}
           <div className="p-6 flex flex-col gap-4">
-            <MetricBar label="CPU Utilization" value={fakeCPU} color={typeCfg.color} />
-            <MetricBar label="Memory Usage" value={fakeMemory} color={typeCfg.color} />
-            <MetricBar label="Disk I/O" value={fakeDisk} color={typeCfg.color} />
+            <MetricBar label="CPU Utilization" value={cpu ? Math.round(cpu) : 0} color={typeCfg.color} />
+            <MetricBar label="Memory Usage" value={memory ? Math.round(memory) : 0} color={typeCfg.color} />
+            <MetricBar label="Disk I/O" value={disk ? Math.round(disk) : 0} color={typeCfg.color} />
             <div className="flex items-center justify-between">
               <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Network Throughput</span>
-              <span className="text-xs font-bold mono" style={{ color: typeCfg.color }}>{fakeNetwork} Mbps</span>
+              <span className="text-xs font-bold mono" style={{ color: typeCfg.color }}>{networkMbps} Mbps</span>
             </div>
 
             {/* Info grid */}
