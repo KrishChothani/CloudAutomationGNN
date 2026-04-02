@@ -39,6 +39,7 @@ app.get('/health', (req, res) => {
   }, 'Service is healthy'))
 })
 
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/v1/users', userRoutes)
 app.use('/api/v1/events', eventsRoutes)
