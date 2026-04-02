@@ -179,7 +179,7 @@ jobs:
             MPLCONFIGDIR=/tmp/matplotlib
             MODEL_BUCKET=cloud-automation-gnn-models
             MODEL_KEY=models/gnn_model.pt
-            NODE_BACKEND_URL=https://480itv48ze.execute-api.ap-south-1.amazonaws.com/dev
+            NODE_BACKEND_URL=https://76hzb1es12.execute-api.ap-south-1.amazonaws.com/dev
             DYNAMODB_ANOMALY_TABLE=cloud-automation-gnn-dev-anomalies
             DYNAMODB_LOG_TABLE=cloud-automation-gnn-dev-automation-logs
             SQS_QUEUE_URL=https://sqs.ap-south-1.amazonaws.com/670467382559/cloud-automation-gnn-dev-event-queue
