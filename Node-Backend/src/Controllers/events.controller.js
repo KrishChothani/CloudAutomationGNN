@@ -2,6 +2,8 @@ import { asyncHandler } from '../Utils/AsyncHandler.js'
 import { ApiError } from '../Utils/ApiError.js'
 import { ApiResponse } from '../Utils/ApiResponse.js'
 import Event from '../Models/event.model.js'
+import Anomaly from '../Models/anomaly.model.js'
+import AutomationLog from '../Models/automationLog.model.js'
 import axios from 'axios'
 
 const PYTHON_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000'
@@ -63,10 +65,10 @@ export const createEvent = asyncHandler(async (req, res) => {
   // Asynchronously forward to Python GNN service
   try {
     await axios.post(`${PYTHON_URL}/predict`, {
-      eventId: event._id.toString(),
-      resourceId: event.resourceId,
+      eventId:      event._id.toString(),
+      resourceId:   event.resourceId,
       resourceType: event.resourceType,
-      metrics: event.metrics,
+      metrics:      event.metrics,
     }, { timeout: 10000 })
   } catch (err) {
     console.warn('⚠️  Python GNN service unavailable:', err.message)
@@ -88,21 +90,79 @@ export const batchCreateEvents = asyncHandler(async (req, res) => {
 })
 
 // ─── GET /events/stats ────────────────────────────────────────────────────────
+// Returns the shape the Dashboard stat cards need:
+// { totalResources, activeAnomalies, automationsToday, avgAnomalyScore }
 export const getEventStats = asyncHandler(async (req, res) => {
-  const stats = await Event.aggregate([
-    {
-      $group: {
-        _id: '$resourceType',
-        count: { $sum: 1 },
-        processedCount: { $sum: { $cond: ['$processed', 1, 0] } },
-        avgCpu: { $avg: '$metrics.cpuUsage' },
-        avgMemory: { $avg: '$metrics.memoryUsage' },
-      },
-    },
-    { $sort: { count: -1 } },
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+
+  const [
+    totalResources,
+    activeAnomalies,
+    automationsToday,
+    avgScoreResult,
+  ] = await Promise.all([
+    // Count distinct resourceIds in Event collection
+    Event.distinct('resourceId').then(ids => ids.length),
+
+    // Active (unresolved) anomalies
+    Anomaly.countDocuments({ resolved: false }),
+
+    // Automation actions triggered today
+    AutomationLog.countDocuments({ createdAt: { $gte: todayStart } }),
+
+    // Average anomaly score across unresolved anomalies
+    Anomaly.aggregate([
+      { $match: { resolved: false } },
+      { $group: { _id: null, avg: { $avg: '$score' } } },
+    ]),
   ])
 
-  const total = await Event.countDocuments()
+  const avgAnomalyScore = avgScoreResult[0]?.avg ?? 0
 
-  return res.status(200).json(new ApiResponse(200, { total, byType: stats }, 'Event stats fetched'))
+  return res.status(200).json(
+    new ApiResponse(200, {
+      totalResources,
+      activeAnomalies,
+      automationsToday,
+      avgAnomalyScore: Math.round(avgAnomalyScore * 100) / 100,
+    }, 'Dashboard stats fetched')
+  )
+})
+
+// ─── GET /events/:resourceId/metrics ─────────────────────────────────────────
+// Returns time-series arrays for MetricsChart
+// Response: { timestamps: [], cpu: [], memory: [], latency: [], errorRate: [] }
+export const getResourceMetrics = asyncHandler(async (req, res) => {
+  const { resourceId } = req.params
+  const { limit = 20 } = req.query
+
+  const events = await Event.find({ resourceId })
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .select('metrics createdAt')
+    .lean()
+
+  // Reverse so oldest→newest (chart flows left→right)
+  events.reverse()
+
+  const timestamps = events.map(e =>
+    new Date(e.createdAt).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  )
+  const cpu      = events.map(e => e.metrics?.cpuUsage    ?? null)
+  const memory   = events.map(e => e.metrics?.memoryUsage ?? null)
+  const latency  = events.map(e => e.metrics?.latency     ?? null)
+  const errorRate = events.map(e => e.metrics?.errorRate  ?? null)
+
+  return res.status(200).json(
+    new ApiResponse(200, {
+      resourceId,
+      timestamps,
+      cpu,
+      memory,
+      latency,
+      errorRate,
+      count: events.length,
+    }, `Metrics for ${resourceId}`)
+  )
 })

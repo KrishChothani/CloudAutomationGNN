@@ -3,9 +3,10 @@ dotenv.config()
 
 import connectDB from './db/index.js'
 import app from './app.js'
+import { startPoller } from './Utils/cloudwatchPoller.js'
 
-import dns from "node:dns/promises";
-dns.setServers(["8.8.8.8", "8.8.4.4"]);
+import dns from 'node:dns/promises'
+dns.setServers(['8.8.8.8', '8.8.4.4'])
 
 const PORT = process.env.PORT || 5000
 
@@ -16,6 +17,9 @@ connectDB()
       console.log(`   Health: http://localhost:${PORT}/health`)
       console.log(`   Env:    ${process.env.NODE_ENV || 'development'}\n`)
     })
+
+    // Start CloudWatch poller after DB is connected
+    startPoller()
   })
   .catch((err) => {
     console.error('Failed to start server:', err)

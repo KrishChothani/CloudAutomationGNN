@@ -2,16 +2,57 @@ import { asyncHandler } from '../Utils/AsyncHandler.js'
 import { ApiError } from '../Utils/ApiError.js'
 import { ApiResponse } from '../Utils/ApiResponse.js'
 import Anomaly from '../Models/anomaly.model.js'
-
-// In-memory log (replace with DynamoDB or MongoDB collection in production)
-const actions = []
+import AutomationLog from '../Models/automationLog.model.js'
 
 // ─── GET /automation/logs ─────────────────────────────────────────────────────
 export const getAutomationLogs = asyncHandler(async (req, res) => {
-  const { limit = 50, status } = req.query
-  let result = [...actions].reverse()
-  if (status) result = result.filter((a) => a.status === status)
-  return res.status(200).json(new ApiResponse(200, { logs: result.slice(0, parseInt(limit)) }, 'Automation logs fetched'))
+  const { limit = 20, status } = req.query
+
+  const filter = {}
+  if (status) filter.status = status
+
+  const logs = await AutomationLog.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .populate('anomalyId', 'resourceId severity score')
+    .lean()
+
+  // Map to the shape AutomationLog.jsx expects
+  const formatted = logs.map(log => ({
+    id:          log._id.toString(),
+    icon:        inferIcon(log.actionType || log.action),
+    title:       log.action,
+    description: log.description,
+    timestamp:   log.createdAt,
+    status:      log.status === 'triggered' ? 'PENDING' : log.status.toUpperCase(),
+    anomalyId:   log.anomalyId?._id?.toString() || log.anomalyId?.toString() || null,
+    resource:    log.resourceId || log.anomalyId?.resourceId || 'unknown',
+  }))
+
+  return res.status(200).json(
+    new ApiResponse(200, { logs: formatted }, 'Automation logs fetched')
+  )
+})
+
+// ─── POST /automation/logs ────────────────────────────────────────────────────
+export const createAutomationLog = asyncHandler(async (req, res) => {
+  const { action, description, anomalyId, resourceId, actionType, status = 'SUCCESS', triggeredBy = 'system' } = req.body
+
+  if (!action || !description) {
+    throw new ApiError(400, 'action and description are required')
+  }
+
+  const log = await AutomationLog.create({
+    action,
+    description,
+    anomalyId:   anomalyId  || undefined,
+    resourceId:  resourceId || undefined,
+    actionType:  actionType || undefined,
+    status,
+    triggeredBy,
+  })
+
+  return res.status(201).json(new ApiResponse(201, { log }, 'Automation log created'))
 })
 
 // ─── POST /automation/trigger ─────────────────────────────────────────────────
@@ -26,43 +67,45 @@ export const triggerRemediation = asyncHandler(async (req, res) => {
   if (!anomaly) throw new ApiError(404, 'Anomaly not found')
 
   const SUPPORTED_ACTIONS = {
-    'scale-out': 'Scale out Auto Scaling Group',
-    'restart-service': 'Restart ECS/Lambda service',
-    'failover-db': 'Trigger RDS Multi-AZ failover',
-    'drain-instance': 'Drain ELB target and deregister',
-    'increase-memory': 'Increase Lambda memory allocation',
-    'notify': 'Send PagerDuty / SNS notification',
+    'scale-out':        'Auto-scaled EC2 / ECS fleet',
+    'restart-service':  'Restarted Lambda / ECS service',
+    'failover-db':      'Triggered RDS Multi-AZ failover',
+    'drain-instance':   'Drained and deregistered ELB target',
+    'increase-memory':  'Increased Lambda memory allocation',
+    'notify':           'Sent PagerDuty / SNS notification',
   }
 
   if (!SUPPORTED_ACTIONS[actionType]) {
     throw new ApiError(400, `Unsupported actionType. Must be one of: ${Object.keys(SUPPORTED_ACTIONS).join(', ')}`)
   }
 
-  const log = {
-    id: `action-${Date.now()}`,
-    anomalyId,
+  const actionLabel = SUPPORTED_ACTIONS[actionType]
+  const effectiveResourceId = resourceId || anomaly.resourceId
+
+  // Persist to MongoDB
+  const log = await AutomationLog.create({
+    action:      actionLabel,
+    description: `${actionLabel} triggered for ${effectiveResourceId} (anomalyId: ${anomalyId})`,
     actionType,
-    actionLabel: SUPPORTED_ACTIONS[actionType],
-    resourceId: resourceId || anomaly.resourceId,
-    params,
-    status: 'triggered',
-    triggeredBy: req.user?.email || 'system',
-    triggeredAt: new Date(),
-  }
+    anomalyId,
+    resourceId:  effectiveResourceId,
+    status:      'PENDING',
+    triggeredBy: 'system',
+  })
 
-  actions.push(log)
-
-  // Update anomaly action field
+  // Update anomaly status
   await Anomaly.findByIdAndUpdate(anomalyId, {
-    action: SUPPORTED_ACTIONS[actionType],
+    action:       actionLabel,
     actionStatus: 'triggered',
   })
 
-  // Simulate async completion
+  // Simulate async completion — update log to SUCCESS/FAILED
   setTimeout(async () => {
-    log.status = 'success'
-    log.completedAt = new Date()
-    await Anomaly.findByIdAndUpdate(anomalyId, { actionStatus: 'success' })
+    const finalStatus = Math.random() > 0.1 ? 'SUCCESS' : 'FAILED'
+    await AutomationLog.findByIdAndUpdate(log._id, { status: finalStatus })
+    await Anomaly.findByIdAndUpdate(anomalyId, {
+      actionStatus: finalStatus.toLowerCase(),
+    })
   }, 3000)
 
   return res.status(202).json(new ApiResponse(202, { log }, 'Remediation action triggered'))
@@ -70,11 +113,24 @@ export const triggerRemediation = asyncHandler(async (req, res) => {
 
 // ─── GET /automation/stats ────────────────────────────────────────────────────
 export const getAutomationStats = asyncHandler(async (req, res) => {
-  const stats = {
-    total: actions.length,
-    success: actions.filter((a) => a.status === 'success').length,
-    triggered: actions.filter((a) => a.status === 'triggered').length,
-    failed: actions.filter((a) => a.status === 'failed').length,
-  }
-  return res.status(200).json(new ApiResponse(200, stats, 'Automation stats'))
+  const [total, success, pending, failed] = await Promise.all([
+    AutomationLog.countDocuments(),
+    AutomationLog.countDocuments({ status: 'SUCCESS' }),
+    AutomationLog.countDocuments({ status: { $in: ['PENDING', 'triggered'] } }),
+    AutomationLog.countDocuments({ status: 'FAILED' }),
+  ])
+
+  return res.status(200).json(
+    new ApiResponse(200, { total, success, pending, failed }, 'Automation stats')
+  )
 })
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+function inferIcon(actionType) {
+  if (!actionType) return 'alert'
+  const t = actionType.toLowerCase()
+  if (t.includes('scale')) return 'scale'
+  if (t.includes('restart') || t.includes('redeploy')) return 'restart'
+  if (t.includes('block') || t.includes('drain') || t.includes('failover')) return 'block'
+  return 'alert'
+}

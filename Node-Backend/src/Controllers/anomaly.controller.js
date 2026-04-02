@@ -6,6 +6,31 @@ import axios from 'axios'
 
 const PYTHON_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000'
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Normalize severity to UPPER case for frontend tab filters */
+function normalizeSeverity(s) {
+  if (!s) return 'LOW'
+  return s.toUpperCase()
+}
+
+/** Map anomaly doc → AlertCard/frontend shape */
+function toAlertShape(anomaly) {
+  const severity = normalizeSeverity(anomaly.severity)
+  return {
+    id:           anomaly._id?.toString(),
+    resourceName: anomaly.resourceId,
+    resourceType: anomaly.resourceType,
+    cause:        anomaly.explanation  || `Anomaly detected — severity: ${severity}`,
+    anomalyScore: anomaly.score        ?? 0,
+    severity,
+    timestamp:    anomaly.createdAt,
+    actionStatus: anomaly.actionStatus ? anomaly.actionStatus.toUpperCase() : 'PENDING',
+    resolved:     anomaly.resolved     ?? false,
+    region:       anomaly.region       || 'ap-south-1',
+  }
+}
+
 // ─── GET /anomalies ───────────────────────────────────────────────────────────
 export const getAnomalies = asyncHandler(async (req, res) => {
   const {
@@ -14,32 +39,53 @@ export const getAnomalies = asyncHandler(async (req, res) => {
     severity,
     resolved,
     resourceId,
-    sortBy = 'createdAt',
+    sort = 'severity',  // 'severity' | 'timestamp'
     sortOrder = 'desc',
   } = req.query
 
   const filter = {}
-  if (severity) filter.severity = severity
+  if (severity)             filter.severity  = severity.toLowerCase()
   if (resolved !== undefined) filter.resolved = resolved === 'true'
-  if (resourceId) filter.resourceId = resourceId
+  if (resourceId)           filter.resourceId = resourceId
 
-  const skip = (parseInt(page) - 1) * parseInt(limit)
+  const skip    = (parseInt(page) - 1) * parseInt(limit)
   const sortDir = sortOrder === 'asc' ? 1 : -1
 
-  const [anomalies, total] = await Promise.all([
+  // Sort by severity (critical first) then timestamp
+  const sortQuery = sort === 'severity'
+    ? { severity: 1, createdAt: sortDir }   // alphabetical works: critical < high < low < medium — override below
+    : { createdAt: sortDir }
+
+  const [rawAnomalies, total] = await Promise.all([
     Anomaly.find(filter)
       .populate('eventId', 'resourceId resourceType metrics createdAt')
-      .sort({ [sortBy]: sortDir })
+      .sort(sortQuery)
       .skip(skip)
       .limit(parseInt(limit))
       .lean(),
     Anomaly.countDocuments(filter),
   ])
 
+  // Re-sort by severity weight after fetching (since MongoDB string sort isn't severity order)
+  const SEVERITY_WEIGHT = { critical: 0, high: 1, medium: 2, low: 3 }
+  if (sort === 'severity') {
+    rawAnomalies.sort((a, b) => {
+      const wa = SEVERITY_WEIGHT[a.severity] ?? 4
+      const wb = SEVERITY_WEIGHT[b.severity] ?? 4
+      if (wa !== wb) return wa - wb
+      return new Date(b.createdAt) - new Date(a.createdAt)
+    })
+  }
+
+  const data = rawAnomalies.map(toAlertShape)
+
   return res.status(200).json(
     new ApiResponse(200, {
-      anomalies,
-      pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / limit) },
+      data,
+      total,
+      page:  parseInt(page),
+      limit: parseInt(limit),
+      pages: Math.ceil(total / parseInt(limit)),
     }, 'Anomalies fetched')
   )
 })
@@ -50,30 +96,29 @@ export const getAnomalyById = asyncHandler(async (req, res) => {
     .populate('eventId')
     .lean()
   if (!anomaly) throw new ApiError(404, 'Anomaly not found')
-  return res.status(200).json(new ApiResponse(200, { anomaly }, 'Anomaly fetched'))
+  return res.status(200).json(new ApiResponse(200, { anomaly: toAlertShape(anomaly) }, 'Anomaly fetched'))
 })
 
-// ─── GET /anomalies/explain/:id ───────────────────────────────────────────────
+// ─── GET /anomalies/:id/explain ───────────────────────────────────────────────
+// Note: route must be registered BEFORE /:id to avoid collision — handled in routes file
 export const getExplanation = asyncHandler(async (req, res) => {
   const anomaly = await Anomaly.findById(req.params.id).lean()
   if (!anomaly) throw new ApiError(404, 'Anomaly not found')
 
   // If explanation already cached, return it
   if (anomaly.explanation && anomaly.shapValues) {
-    return res.status(200).json(new ApiResponse(200, {
-      anomalyId: anomaly._id,
-      explanation: anomaly.explanation,
-      shapValues: anomaly.shapValues,
-      affectedNodes: anomaly.affectedNodes,
-    }, 'Explanation from cache'))
+    return res.status(200).json(new ApiResponse(200,
+      buildExplanationResponse(anomaly),
+      'Explanation from cache'
+    ))
   }
 
   // Otherwise call Python XAI service
   try {
     const response = await axios.post(`${PYTHON_URL}/explain`, {
-      anomalyId: anomaly._id.toString(),
+      anomalyId:  anomaly._id.toString(),
       resourceId: anomaly.resourceId,
-      score: anomaly.score,
+      score:      anomaly.score,
     }, { timeout: 15000 })
 
     const { explanation, shapValues, affectedNodes } = response.data
@@ -81,32 +126,66 @@ export const getExplanation = asyncHandler(async (req, res) => {
     // Cache back to DB
     await Anomaly.findByIdAndUpdate(anomaly._id, { explanation, shapValues, affectedNodes })
 
-    return res.status(200).json(new ApiResponse(200, {
-      anomalyId: anomaly._id,
-      explanation,
-      shapValues,
-      affectedNodes,
-    }, 'Explanation generated'))
+    const updated = { ...anomaly, explanation, shapValues, affectedNodes }
+    return res.status(200).json(new ApiResponse(200, buildExplanationResponse(updated), 'Explanation generated'))
   } catch (err) {
     console.error('Python XAI service error:', err.message)
-    throw new ApiError(502, 'XAI service unavailable')
+    // Return best-effort explanation from existing data rather than a 502
+    return res.status(200).json(new ApiResponse(200,
+      buildExplanationResponse(anomaly),
+      'Explanation (partial — XAI service unavailable)'
+    ))
   }
 })
+
+/** Build the XAIPanel-compatible explanation object from an anomaly doc */
+function buildExplanationResponse(anomaly) {
+  // shapValues in DB is a plain object { cpuUsage: 0.67, memoryUsage: 0.21, ... }
+  // XAIPanel expects: [{ feature, importance, direction }]
+  let shapArray = []
+  if (anomaly.shapValues && typeof anomaly.shapValues === 'object') {
+    shapArray = Object.entries(anomaly.shapValues).map(([key, val]) => ({
+      feature:    key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), // camelCase → Title
+      importance: Math.abs(val),
+      direction:  val >= 0 ? 'positive' : 'negative',
+    })).sort((a, b) => b.importance - a.importance)
+  }
+
+  // affectedNodes in DB: [{ nodeId, nodeType }]
+  // XAIPanel expects: [{ id, label, score }]
+  const cascadePath = (anomaly.affectedNodes || []).map(n => ({
+    id:    n.nodeId,
+    label: n.nodeId,
+    score: 0.5, // fallback — actual score would need another lookup
+  }))
+
+  return {
+    anomalyId:     anomaly._id?.toString(),
+    resourceName:  anomaly.resourceId,
+    resourceType:  anomaly.resourceType  || 'Unknown',
+    anomalyScore:  anomaly.score         ?? 0,
+    shapValues:    shapArray,
+    cascadePath,
+    nlExplanation: anomaly.explanation   || `${anomaly.resourceId} flagged with ${normalizeSeverity(anomaly.severity)} severity (score: ${(anomaly.score * 100).toFixed(0)}%).`,
+    actionTaken:   anomaly.action        || 'No automated action taken yet',
+    actionStatus:  anomaly.actionStatus  ? anomaly.actionStatus.toUpperCase() : 'PENDING',
+  }
+}
 
 // ─── GET /anomalies/stats ─────────────────────────────────────────────────────
 export const getAnomalyStats = asyncHandler(async (req, res) => {
   const stats = await Anomaly.aggregate([
     {
       $group: {
-        _id: '$severity',
-        count: { $sum: 1 },
+        _id:      '$severity',
+        count:    { $sum: 1 },
         resolved: { $sum: { $cond: ['$resolved', 1, 0] } },
         avgScore: { $avg: '$score' },
       },
     },
     { $sort: { _id: 1 } },
   ])
-  const total = await Anomaly.countDocuments()
+  const total  = await Anomaly.countDocuments()
   const active = await Anomaly.countDocuments({ resolved: false })
 
   return res.status(200).json(new ApiResponse(200, { total, active, bySeverity: stats }, 'Anomaly stats'))
@@ -120,5 +199,7 @@ export const resolveAnomaly = asyncHandler(async (req, res) => {
     { new: true }
   )
   if (!anomaly) throw new ApiError(404, 'Anomaly not found')
-  return res.status(200).json(new ApiResponse(200, { anomaly }, 'Anomaly resolved'))
+  return res.status(200).json(new ApiResponse(200, { anomaly: toAlertShape(anomaly) }, 'Anomaly resolved'))
 })
+
+

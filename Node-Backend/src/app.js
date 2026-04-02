@@ -4,23 +4,34 @@ import cookieParser from 'cookie-parser'
 import morgan from 'morgan'
 
 // Route imports
-import userRoutes from './Routes/user.routes.js'
-import eventsRoutes from './Routes/events.routes.js'
-import anomalyRoutes from './Routes/anomaly.routes.js'
-import { ApiError } from './Utils/ApiError.js'
-import { ApiResponse } from './Utils/ApiResponse.js'
+import userRoutes       from './Routes/user.routes.js'
+import eventsRoutes     from './Routes/events.routes.js'
+import anomalyRoutes    from './Routes/anomaly.routes.js'
+import graphRoutes      from './Routes/graph.routes.js'
+import automationRoutes from './Routes/automation.routes.js'
+import { ApiError }     from './Utils/ApiError.js'
+import { ApiResponse }  from './Utils/ApiResponse.js'
 
 // ─── Create Express app ───────────────────────────────────────────────────────
 const app = express()
 
 // ─── Middlewares ──────────────────────────────────────────────────────────────
+const allowedOrigins = [
+  'http://cloud-automation-gnn-frontend-dev.s3-website.ap-south-1.amazonaws.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+]
+
 app.use(cors({
-  origin: "http://cloud-automation-gnn-frontend-dev.s3-website.ap-south-1.amazonaws.com",
+  origin: (origin, cb) => {
+    // Allow requests with no origin (curl, Postman, Lambda-to-Lambda)
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
+    cb(new Error(`CORS: origin ${origin} not allowed`))
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }))
-
 
 app.use(express.json({ limit: '2mb' }))
 app.use(express.urlencoded({ extended: true, limit: '2mb' }))
@@ -33,17 +44,18 @@ if (process.env.NODE_ENV !== 'production') {
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.status(200).json(new ApiResponse(200, {
-    status: 'OK',
-    service: 'CloudAutomationGNN Node Backend',
+    status:    'OK',
+    service:   'CloudAutomationGNN Node Backend',
     timestamp: new Date().toISOString(),
   }, 'Service is healthy'))
 })
 
-
 // ─── API Routes ───────────────────────────────────────────────────────────────
-app.use('/api/v1/users', userRoutes)
-app.use('/api/v1/events', eventsRoutes)
-app.use('/api/v1/anomalies', anomalyRoutes)
+app.use('/api/v1/users',      userRoutes)
+app.use('/api/v1/events',     eventsRoutes)
+app.use('/api/v1/anomalies',  anomalyRoutes)
+app.use('/api/v1/graph',      graphRoutes)
+app.use('/api/v1/automation', automationRoutes)
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -53,7 +65,7 @@ app.use((req, res) => {
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500
-  const message = err.message || 'Internal Server Error'
+  const message    = err.message    || 'Internal Server Error'
 
   if (process.env.NODE_ENV !== 'production') {
     console.error(`[ERROR] ${statusCode}: ${message}`, err.stack)

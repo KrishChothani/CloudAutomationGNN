@@ -1,29 +1,18 @@
 /**
  * AlertsPage.jsx
  * ──────────────
- * Full paginated alert listing page for CloudAutomationGNN.
- *
- * Features:
- *   - Five severity tab filters: All | Critical | High | Medium | Low
- *     Each tab shows a live count badge derived from the current dataset.
- *   - Search input filters by resource name or cause description.
- *   - Alerts sorted by severity (CRITICAL first) then timestamp (newest first).
- *   - 10 alerts per page with prev / next pagination controls.
- *   - Dismiss applies per-session (Set state) — cards vanish without reload.
- *   - Clicking "View Explanation" opens XAIPanel as a right-side drawer.
- *   - Empty state illustration when no alerts match the current filter/query.
- *
- * Data: 15 mock alert objects imported from src/assets/mockData.js
- * Rule compliance: functional component, hooks only, PropTypes, no real API
+ * Full paginated alert listing page.
+ * Data fetched from GET /api/v1/anomalies with server-side filtering.
+ * Polls every 30 seconds.
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import PropTypes from 'prop-types'
 import { MdSearch, MdInbox, MdKeyboardArrowLeft, MdKeyboardArrowRight } from 'react-icons/md'
 import Sidebar   from '../Components/Sidebar.jsx'
 import AlertCard from '../Components/AlertCard.jsx'
 import XAIPanel  from '../Components/XAIPanel.jsx'
-import { MOCK_ALERTS } from '../../assets/mockData.js'
+import apiClient from '../../services/apiClient.js'
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 10
@@ -36,17 +25,24 @@ const TABS = [
   { key: 'LOW',      label: 'Low',      color: '#34d399' },
 ]
 
-function getAlertSeverityKey(score) {
-  if (score >= 0.85) return 'CRITICAL'
-  if (score >= 0.65) return 'HIGH'
-  if (score >= 0.35) return 'MEDIUM'
-  return 'LOW'
-}
-
 const SEVERITY_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
 
 // ─── Empty state ───────────────────────────────────────────────────────────────
-function EmptyState({ filter, query }) {
+function EmptyState({ filter, query, loading }) {
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4 mt-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="glass-card p-5 animate-pulse"
+               style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <div className="h-3 w-32 rounded mb-3" style={{ background: 'rgba(255,255,255,0.08)' }} />
+            <div className="h-2 w-64 rounded mb-2" style={{ background: 'rgba(255,255,255,0.05)' }} />
+            <div className="h-2 w-48 rounded" style={{ background: 'rgba(255,255,255,0.04)' }} />
+          </div>
+        ))}
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-4">
       <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
@@ -66,10 +62,11 @@ function EmptyState({ filter, query }) {
 }
 
 EmptyState.propTypes = {
-  filter: PropTypes.string.isRequired,
-  query:  PropTypes.string,
+  filter:  PropTypes.string.isRequired,
+  query:   PropTypes.string,
+  loading: PropTypes.bool,
 }
-EmptyState.defaultProps = { query: '' }
+EmptyState.defaultProps = { query: '', loading: false }
 
 // ─── Pagination control ────────────────────────────────────────────────────────
 function Pagination({ page, totalPages, onPrev, onNext }) {
@@ -125,45 +122,51 @@ Pagination.propTypes = {
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 export default function AlertsPage() {
-  const [activeTab, setActiveTab]     = useState('ALL')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [page, setPage]               = useState(1)
-  const [xaiAlert, setXaiAlert]       = useState(null)
-  const [dismissed, setDismissed]     = useState(new Set())
+  const [activeTab,    setActiveTab]    = useState('ALL')
+  const [searchQuery,  setSearchQuery]  = useState('')
+  const [page,         setPage]         = useState(1)
+  const [xaiAlert,     setXaiAlert]     = useState(null)
+  const [dismissed,    setDismissed]    = useState(new Set())
 
-  // Filter + sort
-  const filtered = useMemo(() => {
-    return MOCK_ALERTS
-      .filter((a) => !dismissed.has(a.id))
-      .filter((a) => {
-        if (activeTab !== 'ALL' && getAlertSeverityKey(a.anomalyScore) !== activeTab) return false
-        if (searchQuery && !a.resourceName.toLowerCase().includes(searchQuery.toLowerCase()) &&
-            !a.cause.toLowerCase().includes(searchQuery.toLowerCase())) return false
-        return true
-      })
-      .sort((a, b) => {
-        const sa = SEVERITY_ORDER[getAlertSeverityKey(a.anomalyScore)]
-        const sb = SEVERITY_ORDER[getAlertSeverityKey(b.anomalyScore)]
-        if (sa !== sb) return sa - sb
-        return new Date(b.timestamp) - new Date(a.timestamp)
-      })
-  }, [activeTab, searchQuery, dismissed])
+  // Real data state
+  const [allAlerts,  setAllAlerts]  = useState([])
+  const [total,      setTotal]      = useState(0)
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState(null)
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // ── Fetch alerts from API ─────────────────────────────────────────────────
+  const fetchAlerts = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-  // Tab counts
-  const counts = useMemo(() => {
-    const base = MOCK_ALERTS.filter((a) => !dismissed.has(a.id))
-    return {
-      ALL:      base.length,
-      CRITICAL: base.filter((a) => getAlertSeverityKey(a.anomalyScore) === 'CRITICAL').length,
-      HIGH:     base.filter((a) => getAlertSeverityKey(a.anomalyScore) === 'HIGH').length,
-      MEDIUM:   base.filter((a) => getAlertSeverityKey(a.anomalyScore) === 'MEDIUM').length,
-      LOW:      base.filter((a) => getAlertSeverityKey(a.anomalyScore) === 'LOW').length,
+      const params = {
+        page,
+        limit: PAGE_SIZE,
+        sort:  'severity',
+      }
+      if (activeTab !== 'ALL') params.severity = activeTab
+
+      const res = await apiClient.get('/anomalies', { params })
+      const payload = res.data.data
+
+      setAllAlerts(payload?.data || [])
+      setTotal(payload?.total || 0)
+    } catch (err) {
+      console.error('Failed to fetch alerts:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-  }, [dismissed])
+  }, [activeTab, page])
 
+  useEffect(() => {
+    fetchAlerts()
+    const interval = setInterval(fetchAlerts, 30000)
+    return () => clearInterval(interval)
+  }, [fetchAlerts])
+
+  // Reset page when tab changes
   const handleTabChange = (key) => {
     setActiveTab(key)
     setPage(1)
@@ -178,6 +181,31 @@ export default function AlertsPage() {
     setDismissed((prev) => new Set(prev).add(id))
   }
 
+  // ── Client-side filtering (search + dismissed) after API fetch ────────────
+  const filtered = useMemo(() => {
+    return allAlerts
+      .filter((a) => !dismissed.has(a.id))
+      .filter((a) => {
+        if (!searchQuery) return true
+        const q = searchQuery.toLowerCase()
+        return (
+          a.resourceName?.toLowerCase().includes(q) ||
+          a.cause?.toLowerCase().includes(q)
+        )
+      })
+  }, [allAlerts, dismissed, searchQuery])
+
+  // Tab counts derived from current page data (approximate — full counts from server)
+  const counts = useMemo(() => ({
+    ALL:      total,
+    CRITICAL: allAlerts.filter(a => a.severity === 'CRITICAL').length,
+    HIGH:     allAlerts.filter(a => a.severity === 'HIGH').length,
+    MEDIUM:   allAlerts.filter(a => a.severity === 'MEDIUM').length,
+    LOW:      allAlerts.filter(a => a.severity === 'LOW').length,
+  }), [allAlerts, total])
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
   return (
     <div className="app-layout">
       <Sidebar />
@@ -189,17 +217,23 @@ export default function AlertsPage() {
           <div>
             <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Alerts</h1>
             <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              {filtered.length} alert{filtered.length !== 1 ? 's' : ''} · sorted by severity then time
+              {loading ? 'Loading…' : `${total} alert${total !== 1 ? 's' : ''} · sorted by severity`}
             </p>
           </div>
 
-          {/* Active anomaly chip */}
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            {counts.CRITICAL + counts.HIGH} Requires Attention
+            {(counts.CRITICAL || 0) + (counts.HIGH || 0)} Requires Attention
           </div>
         </div>
+
+        {/* ── Error state ── */}
+        {error && (
+          <div className="glass-card p-4 mb-4 text-sm" style={{ color: '#f87171', borderColor: 'rgba(239,68,68,0.3)' }}>
+            ⚠️ Failed to load alerts: {error} — retrying every 30s
+          </div>
+        )}
 
         {/* ── Filter bar ── */}
         <div className="glass-card p-4 mb-5">
@@ -208,7 +242,7 @@ export default function AlertsPage() {
             {/* Tab pills */}
             <div className="flex items-center gap-1 flex-wrap">
               {TABS.map(({ key, label, color }) => {
-                const count   = counts[key]
+                const count    = counts[key] ?? 0
                 const isActive = activeTab === key
                 return (
                   <button
@@ -260,11 +294,11 @@ export default function AlertsPage() {
         </div>
 
         {/* ── Alert grid ── */}
-        {paginated.length === 0 ? (
-          <EmptyState filter={activeTab} query={searchQuery} />
+        {loading || filtered.length === 0 ? (
+          <EmptyState filter={activeTab} query={searchQuery} loading={loading} />
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-            {paginated.map((alert) => (
+            {filtered.map((alert) => (
               <AlertCard
                 key={alert.id}
                 alert={alert}
@@ -284,9 +318,9 @@ export default function AlertsPage() {
         />
 
         {/* Showing X–Y of Z */}
-        {filtered.length > 0 && (
+        {!loading && total > 0 && (
           <p className="text-center text-xs mt-3" style={{ color: 'var(--text-muted)' }}>
-            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} alerts
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} alerts
           </p>
         )}
 
@@ -294,7 +328,7 @@ export default function AlertsPage() {
 
       {/* ── XAI side panel ── */}
       <XAIPanel
-        explanation={xaiAlert}
+        alert={xaiAlert}
         isOpen={!!xaiAlert}
         onClose={() => setXaiAlert(null)}
       />

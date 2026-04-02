@@ -2,46 +2,28 @@
  * DashboardPage.jsx
  * ─────────────────
  * Main authenticated view for CloudAutomationGNN.
- *
- * Layout (responsive Tailwind grid):
- *   ┌─────────────────────────────────────────┐
- *   │ Sidebar                              │
- *   ├─────────────────────────────────────────┤
- *   │ [stat] [stat] [stat]  [stat]          │
- *   ├─────────────────────────────────────────┤
- *   │ ResourceGraph (60%) │ Top-5 Alerts   │
- *   ├─────────────────────────────────────────┤
- *   │ MetricsChart (50%)  │ AutomationLog  │
- *   └─────────────────────────────────────────┘
- *
- * State:
- *   selectedNodeId — updated when user clicks a graph node → drives MetricsChart
- *   xaiAlert       — alert object passed to XAIPanel drawer
- *   detailNode     — node data passed to NodeDetailModal
- *
- * Data: all mock — MOCK_ALERTS and MOCK_STATS from src/assets/mockData.js
- * Rule compliance: functional component, hooks only, PropTypes, no real API
+ * All data fetched from real API. Polls stats every 30 s.
  */
 
-import { useState, useContext } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import PropTypes from 'prop-types'
 import {
   MdCloud, MdErrorOutline, MdAutoFixHigh, MdShowChart,
   MdKeyboardArrowRight,
 } from 'react-icons/md'
-import Sidebar           from '../Components/Sidebar.jsx'
-import ResourceGraph     from '../Components/ResourceGraph.jsx'
-import MetricsChart      from '../Components/MetricsChart.jsx'
-import AlertCard         from '../Components/AlertCard.jsx'
-import AutomationLog     from '../Components/AutomationLog.jsx'
-import XAIPanel          from '../Components/XAIPanel.jsx'
-import NodeDetailModal   from '../Components/NodeDetailModal.jsx'
-import AuthContext       from '../Contexts/AuthContext.js'
-import { MOCK_ALERTS, MOCK_STATS } from '../../assets/mockData.js'
-import { Link } from 'react-router-dom'
+import Sidebar         from '../Components/Sidebar.jsx'
+import ResourceGraph   from '../Components/ResourceGraph.jsx'
+import MetricsChart    from '../Components/MetricsChart.jsx'
+import AlertCard       from '../Components/AlertCard.jsx'
+import AutomationLog   from '../Components/AutomationLog.jsx'
+import XAIPanel        from '../Components/XAIPanel.jsx'
+import NodeDetailModal from '../Components/NodeDetailModal.jsx'
+import AuthContext     from '../Contexts/AuthContext.js'
+import apiClient       from '../../services/apiClient.js'
+import { Link }        from 'react-router-dom'
 
 // ─── Stat Card ─────────────────────────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, delta, color }) {
+function StatCard({ icon: Icon, label, value, delta, color, loading }) {
   return (
     <div className="glass-card p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between">
@@ -57,7 +39,11 @@ function StatCard({ icon: Icon, label, value, delta, color }) {
         </span>
       </div>
       <div>
-        <p className="text-3xl font-black" style={{ color: 'var(--text-primary)' }}>{value}</p>
+        {loading ? (
+          <div className="h-8 w-16 rounded-lg animate-pulse" style={{ background: 'rgba(255,255,255,0.08)' }} />
+        ) : (
+          <p className="text-3xl font-black" style={{ color: 'var(--text-primary)' }}>{value}</p>
+        )}
         <p className="text-xs font-medium uppercase tracking-widest mt-1" style={{ color: 'var(--text-muted)' }}>
           {label}
         </p>
@@ -67,26 +53,68 @@ function StatCard({ icon: Icon, label, value, delta, color }) {
 }
 
 StatCard.propTypes = {
-  icon:  PropTypes.elementType.isRequired,
-  label: PropTypes.string.isRequired,
-  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-  delta: PropTypes.string.isRequired,
-  color: PropTypes.string.isRequired,
+  icon:    PropTypes.elementType.isRequired,
+  label:   PropTypes.string.isRequired,
+  value:   PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  delta:   PropTypes.string.isRequired,
+  color:   PropTypes.string.isRequired,
+  loading: PropTypes.bool,
 }
+StatCard.defaultProps = { loading: false }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { user } = useContext(AuthContext)
 
-  // Selected graph node drives MetricsChart
-  const [selectedNode,   setSelectedNode]   = useState(null)
+  // ── State ──────────────────────────────────────────────────────────────────
   const [selectedNodeId, setSelectedNodeId] = useState(null)
+  const [detailNode,     setDetailNode]     = useState(null)
+  const [xaiAlert,       setXaiAlert]       = useState(null)
 
-  // XAI panel
-  const [xaiAlert, setXaiAlert] = useState(null)
+  const [stats,      setStats]      = useState(null)
+  const [topAlerts,  setTopAlerts]  = useState([])
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [alertsLoading, setAlertsLoading] = useState(true)
 
-  // Node detail modal
-  const [detailNode, setDetailNode] = useState(null)
+  // ── Fetch dashboard stats ─────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        const res = await apiClient.get('/events/stats')
+        setStats(res.data.data)
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats:', err)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+    const interval = setInterval(fetchStats, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // ── Fetch top 5 alerts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        setAlertsLoading(true)
+        const res = await apiClient.get('/anomalies', {
+          params: { limit: 5, sort: 'severity', resolved: false },
+        })
+        setTopAlerts(res.data.data?.data || [])
+      } catch (err) {
+        console.error('Failed to fetch top alerts:', err)
+      } finally {
+        setAlertsLoading(false)
+      }
+    }
+
+    fetchAlerts()
+    const interval = setInterval(fetchAlerts, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleNodeClick = (nodeData) => {
     setSelectedNodeId(nodeData.id)
@@ -97,37 +125,34 @@ export default function DashboardPage() {
     {
       icon:  MdCloud,
       label: 'Total Resources',
-      value: MOCK_STATS.totalResources,
-      delta: '+2 today',
+      value: stats?.totalResources ?? '—',
+      delta: 'Live',
       color: '#6366f1',
     },
     {
       icon:  MdErrorOutline,
       label: 'Active Anomalies',
-      value: MOCK_STATS.activeAnomalies,
-      delta: '↑ from 1',
+      value: stats?.activeAnomalies ?? '—',
+      delta: 'Unresolved',
       color: '#ef4444',
     },
     {
       icon:  MdAutoFixHigh,
       label: 'Automations Today',
-      value: MOCK_STATS.automationsToday,
-      delta: '↑ 4 auto',
+      value: stats?.automationsToday ?? '—',
+      delta: 'Today',
       color: '#10b981',
     },
     {
       icon:  MdShowChart,
       label: 'Avg Anomaly Score',
-      value: `${(MOCK_STATS.avgAnomalyScore * 100).toFixed(0)}%`,
-      delta: '↓ 3 pts',
+      value: stats?.avgAnomalyScore != null
+        ? `${(stats.avgAnomalyScore * 100).toFixed(0)}%`
+        : '—',
+      delta: 'Avg',
       color: '#f97316',
     },
   ]
-
-  // Top 5 alerts for sidebar preview
-  const topAlerts = [...MOCK_ALERTS]
-    .sort((a, b) => b.anomalyScore - a.anomalyScore)
-    .slice(0, 5)
 
   return (
     <div className="app-layout">
@@ -148,24 +173,26 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
                style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#34d399' }}>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Live · Updated just now
+            Live · Polling every 30s
           </div>
         </div>
 
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          {STAT_CARDS.map((c) => <StatCard key={c.label} {...c} />)}
+          {STAT_CARDS.map((c) => (
+            <StatCard key={c.label} {...c} loading={statsLoading} />
+          ))}
         </div>
 
         {/* ── Middle: graph (60%) + alert sidebar (40%) ── */}
         <div className="grid xl:grid-cols-5 gap-5 mb-5">
 
-          {/* Resource graph — 3 of 5 columns = 60% */}
+          {/* Resource graph — 3 of 5 columns */}
           <div className="xl:col-span-3" style={{ minHeight: '460px' }}>
             <ResourceGraph onNodeClick={handleNodeClick} />
           </div>
 
-          {/* Alert sidebar — 2 of 5 columns = 40% */}
+          {/* Alert sidebar — 2 of 5 columns */}
           <div className="xl:col-span-2 flex flex-col gap-3">
             <div className="flex items-center justify-between mb-1">
               <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
@@ -179,13 +206,28 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex flex-col gap-3 overflow-y-auto" style={{ maxHeight: '460px' }}>
-              {topAlerts.map((alert) => (
-                <AlertCard
-                  key={alert.id}
-                  alert={alert}
-                  onExplain={setXaiAlert}
-                />
-              ))}
+              {alertsLoading ? (
+                // Loading skeleton
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="glass-card p-4 animate-pulse"
+                       style={{ background: 'rgba(255,255,255,0.03)' }}>
+                    <div className="h-3 w-24 rounded mb-2" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                    <div className="h-2 w-40 rounded" style={{ background: 'rgba(255,255,255,0.05)' }} />
+                  </div>
+                ))
+              ) : topAlerts.length === 0 ? (
+                <p className="text-xs text-center py-8" style={{ color: 'var(--text-muted)' }}>
+                  No active alerts — system healthy 🟢
+                </p>
+              ) : (
+                topAlerts.map((alert) => (
+                  <AlertCard
+                    key={alert.id}
+                    alert={alert}
+                    onExplain={setXaiAlert}
+                  />
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -204,7 +246,7 @@ export default function DashboardPage() {
 
       {/* ── XAI panel ── */}
       <XAIPanel
-        explanation={xaiAlert}
+        alert={xaiAlert}
         isOpen={!!xaiAlert}
         onClose={() => setXaiAlert(null)}
       />
