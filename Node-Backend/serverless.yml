@@ -21,8 +21,8 @@ provider:
     REFRESH_TOKEN_SECRET:   ${env:REFRESH_TOKEN_SECRET}
     REFRESH_TOKEN_EXPIRY:   ${env:REFRESH_TOKEN_EXPIRY, '7d'}
     PYTHON_SERVICE_URL:     ${env:PYTHON_SERVICE_URL}
-    SNS_TOPIC_ARN:          !Ref CloudAutomationSnsTopic
-    DYNAMODB_TABLE:         !Ref GnnDataTable
+    SNS_TOPIC_ARN:          ${env:SNS_TOPIC_ARN, 'arn:aws:sns:${self:provider.region}:${aws:accountId}:cloud-automation-events-${self:provider.stage}'}
+    DYNAMODB_TABLE:         ${env:DYNAMODB_TABLE, 'cloud-automation-gnn-${self:provider.stage}'}
     WS_CONNECTIONS_TABLE:   cloud-automation-ws-connections-${self:provider.stage}
     AWS_REGION_NAME:        ${self:provider.region}
     NODE_ENV:               ${self:provider.stage}
@@ -60,8 +60,8 @@ provider:
             - dynamodb:BatchWriteItem
             - dynamodb:DescribeTable
           Resource:
-            - !GetAtt GnnDataTable.Arn
-            - !Join [ '/', [ !GetAtt GnnDataTable.Arn, 'index/*' ] ]
+            - !Sub 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}'
+            - !Sub 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}/index/*'
             - !GetAtt WsConnectionsTable.Arn
             - !Join [ '/', [ !GetAtt WsConnectionsTable.Arn, 'index/*' ] ]
 
@@ -84,7 +84,7 @@ provider:
             - sqs:ChangeMessageVisibility
             - sqs:GetQueueUrl
           Resource:
-            - !GetAtt EventQueue.Arn
+            - arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-${self:provider.stage}-event-queue
 
         # ── CloudWatch API: Fetch direct alarms (Needed by anomaly controller)
         - Effect: Allow
@@ -186,7 +186,7 @@ functions:
               - 'CloudMetricEvent'
               - 'CloudWatch Alarm State Change'
       - sqs:
-          arn: !GetAtt EventQueue.Arn
+          arn: arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-${self:provider.stage}-event-queue
           batchSize: 10
           maximumBatchingWindow: 30
           functionResponseType: ReportBatchItemFailures
@@ -213,8 +213,7 @@ functions:
     description: 'Subscribes to SNS and pushes events to all connected WebSocket clients'
     events:
       - sns:
-          arn: !Ref CloudAutomationSnsTopic
-          topicName: cloud-automation-events-${self:provider.stage}
+          arn: ${self:provider.environment.SNS_TOPIC_ARN}
 
 plugins:
   - serverless-esbuild
@@ -266,12 +265,6 @@ package:
 
 resources:
   Resources:
-    # ── SNS Topic ─────────────────────────────────────────────────────────────
-    CloudAutomationSnsTopic:
-      Type: AWS::SNS::Topic
-      Properties:
-        TopicName: cloud-automation-events-${self:provider.stage}
-
     # ── DynamoDB Table for WebSocket Connections ──────────────────────────────
     WsConnectionsTable:
       Type: AWS::DynamoDB::Table
@@ -287,28 +280,3 @@ resources:
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true
-
-    # ── Main DynamoDB Table (Previously Manual) ───────────────────────────────
-    GnnDataTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: cloud-automation-gnn-${self:provider.stage}
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: partitionKey
-            AttributeType: S
-          - AttributeName: sortKey
-            AttributeType: S
-        KeySchema:
-          - AttributeName: partitionKey
-            KeyType: HASH
-          - AttributeName: sortKey
-            KeyType: RANGE
-
-    # ── SQS Event Queue (Previously Manual) ───────────────────────────────────
-    EventQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: cloud-automation-gnn-${self:provider.stage}-event-queue
-        VisibilityTimeout: 90
-        MessageRetentionPeriod: 86400
