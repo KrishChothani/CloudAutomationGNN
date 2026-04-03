@@ -179,16 +179,19 @@ jobs:
 
           echo "🔥 Firing EventBridge event for $RESOURCE ($RESOURCE_TYPE) ..."
 
-          PAYLOAD=$(cat <<EOF
-          [
-            {
-              "Source": "cloud-automation.metrics",
-              "DetailType": "CloudMetricEvent",
-              "Detail": "{\"resource_id\": \"$RESOURCE\", \"resource_type\": \"$RESOURCE_TYPE\", \"metrics\": $METRICS}"
-            }
-          ]
-          EOF
-          )
+          # jq safely encodes $METRICS (a raw JSON object) as a properly-escaped
+          # string inside the Detail field — the root cause of the original error.
+          PAYLOAD=$(jq -n \
+            --arg detail "$(jq -n \
+              --arg rid "$RESOURCE" \
+              --arg rtype "$RESOURCE_TYPE" \
+              --argjson metrics "$METRICS" \
+              '{resource_id: $rid, resource_type: $rtype, metrics: $metrics}')" \
+            '[{
+              Source: "cloud-automation.metrics",
+              DetailType: "CloudMetricEvent",
+              Detail: $detail
+            }]')
 
           aws events put-events --entries "$PAYLOAD"
           echo "✅ EventBridge fired! GNN backend pipeline triggered."

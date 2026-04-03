@@ -1,443 +1,707 @@
-# 🤖 CKsFinBot - AI-Powered Financial Analysis Assistant
+# ☁️ CloudAutomationGNN
 
-<div align="center">
-
-![CKsFinBot Logo](https://img.shields.io/badge/CKsFinBot-AI%20Financial%20Assistant-blue?style=for-the-badge&logo=robot)
-
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![React](https://img.shields.io/badge/React-18+-blue?style=flat-square&logo=react)](https://reactjs.org/)
-[![Python](https://img.shields.io/badge/Python-3.9+-yellow?style=flat-square&logo=python)](https://python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Latest-teal?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Latest-green?style=flat-square&logo=mongodb)](https://mongodb.com/)
-[![AWS](https://img.shields.io/badge/AWS-S3%20%7C%20Lambda-orange?style=flat-square&logo=amazon-aws)](https://aws.amazon.com/)
-
-*Your intelligent companion for financial document analysis, market insights, and data-driven decision making*
-
-</div>
-
-## 🌟 Overview
-
-CKsFinBot is a sophisticated AI-powered financial analysis platform that combines the power of Large Language Models (LLMs) with advanced document processing capabilities. Built with a modern microservices architecture, it provides intelligent financial insights, document
- analysis, and conversational AI features tailored for finance professionals and enthusiasts.
-
-### ✨ Key Features
-
-- 🧠 **Multi-Modal AI Chat** - Text and image support with Google Gemini integration
-- 📄 **Advanced Document Analysis** - PDF, Excel, and financial report processing
-- 📊 **Analytical Insights** - Financial ratio calculations and trend analysis
-- 🔍 **Multi-Document Search** - Cross-document comparison and analysis
-- 💬 **Conversational Interface** - Natural language financial Q&A
-- ☁️ **Large File Support** - S3 presigned URLs for files >10MB
-- 🎨 **Modern UI/UX** - Google AI Studio inspired interface
-- 🔐 **Secure Authentication** - JWT-based user management
-- 📱 **Responsive Design** - Works seamlessly across all devices
-
-## 🏗️ Architecture
-
-```mermaid
-graph TB
-    A[React Frontend] --> B[Node.js Backend]
-    B --> C[Python AI Service]
-    B --> D[MongoDB Database]
-    B --> E[AWS S3 Storage]
-    C --> F[Pinecone Vector DB]
-    C --> G[Google Gemini API]
-    C --> H[LangChain Framework]
-```
-
-### 🔧 Tech Stack
-
-#### Frontend
-- **React 19** - Modern UI framework
-- **Tailwind CSS 4** - Utility-first styling
-- **Framer Motion** - Smooth animations
-- **Lucide React** - Beautiful icons
-- **Axios** - HTTP client
-- **Vite** - Fast build tool
-
-#### Backend (Node.js)
-- **Express.js** - Web framework
-- **MongoDB** - Document database
-- **Mongoose** - ODM for MongoDB
-- **JWT** - Authentication
-- **Multer + AWS S3** - File uploads
-- **Serverless Framework** - Deployment
-
-#### AI Service (Python)
-- **FastAPI** - High-performance API framework
-- **LangChain** - LLM orchestration
-- **Google Gemini** - Advanced AI model
-- **Pinecone** - Vector database
-- **PyPDF** - Document processing
-- **Sentence Transformers** - Text embeddings
-
-#### Cloud & Infrastructure
-- **AWS S3** - File storage
-- **AWS Lambda** - Serverless functions
-- **MongoDB Atlas** - Cloud database
-- **Pinecone** - Vector search
-- **Vercel** - Frontend deployment
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18+ and npm
-- Python 3.11.9 and pip
-- MongoDB instance
-- AWS account (for S3)
-- Google AI API key
-- Pinecone account
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/KrishChothani/CKsFinBot.git
-cd CKsFinBot
-```
-
-### 2. Environment Setup
-
-Create `.env` files in each service directory:
-
-#### Frontend (.env)
-```env
-VITE_API_URL=http://localhost:2590/api/v1
-```
-
-#### Node Backend (.env)
-```env
-PORT=2590
-MONGODB_URI=mongodb://localhost:27017/cksfinbot
-CORS_ORIGIN=http://localhost:5173
-
-# JWT Secrets
-ACCESS_TOKEN_SECRET=your_access_token_secret
-ACCESS_TOKEN_EXPIRY=1d
-REFRESH_TOKEN_SECRET=your_refresh_token_secret
-REFRESH_TOKEN_EXPIRY=10d
-
-# AWS Configuration
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AWS_REGION=us-east-1
-AWS_S3_BUCKET_NAME=your-s3-bucket
-
-# Python Service
-PYTHON_SERVICE_URL=http://127.0.0.1:8000/api/v1
-
-# Email (Optional)
-EMAIL_ID_FOR_VERIFICATION=your_email@gmail.com
-EMAIL_PASSWORD_FOR_VERIFICATION=your_app_password
-```
-
-#### Python Backend (.env)
-```env
-# Google AI
-GOOGLE_API_KEY=your_google_ai_api_key
-
-# Pinecone
-PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_ENVIRONMENT=your_pinecone_environment
-
-# AWS (for document access)
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AWS_REGION=us-east-1
-
-# Database
-MONGODB_URI=mongodb://localhost:27017/cksfinbot
-```
-
-### 3. Installation & Setup
-
-#### Install Frontend Dependencies
-```bash
-cd Frontend
-npm install
-```
-
-#### Install Node Backend Dependencies
-```bash
-cd ../Node-Backend
-npm install
-```
-
-#### Install Python Backend Dependencies
-```bash
-cd ../Python-Backend
-pip install -r requirements.txt
-```
-
-### 4. Database Setup
-
-1. Install MongoDB locally or use MongoDB Atlas
-2. Create a database named `cksfinbot`
-3. The application will automatically create required collections
-
-### 5. Start the Services
-
-#### Terminal 1: Python AI Service
-```bash
-cd Python-Backend
-uvicorn app.main:app --reload --port 8000
-```
-
-#### Terminal 2: Node.js Backend
-```bash
-cd Node-Backend
-npm run dev
-```
-
-#### Terminal 3: React Frontend
-```bash
-cd Frontend
-npm run dev
-```
-
-### 6. Access the Application
-
-Open your browser and navigate to `http://localhost:5173`
-
-## 📖 Usage Guide
-
-### 🎯 Feature Modes
-
-CKsFinBot offers 5 distinct modes for different use cases:
-
-#### 1. 🤖 Smart Chat
-- **Purpose**: Intelligent conversations with text and image support
-- **Use Cases**: General financial questions, image analysis, multi-modal queries
-- **Example**: "Analyze this chart and explain the trends"
-
-#### 2. 📄 Document Analysis
-- **Purpose**: Deep analysis of financial documents and reports
-- **Use Cases**: PDF analysis, financial statement review, report summarization
-- **Example**: "Summarize the key insights from this quarterly report"
-
-#### 3. 📈 Financial Templete Generation
-- **Purpose**: Advanced financial calculations and trend analysis
-- **Use Cases**: Ratio calculations, performance metrics, trend analysis
-- **Example**: "Calculate the debt-to-equity ratio trends over the last 3 years"
-- 
-#### 4. 💬 General Conversation
-- **Purpose**: Casual finance discussions and educational Q&A
-- **Use Cases**: Learning financial concepts, basic questions, definitions
-- **Example**: "What's the difference between stocks and bonds?"
-
-
-### 📁 File Upload Features
-
-#### Supported File Types
-- **PDF**: Financial reports, statements, research papers
-- **Excel/CSV**: Financial data, spreadsheets, datasets
-- **Images**: Charts, graphs, financial diagrams
-
-#### Upload Methods
-1. **Drag & Drop**: Simply drag files into the chat interface
-2. **Click to Browse**: Use the paperclip icon to select files
-3. **Large File Support**: Files >10MB automatically use S3 direct upload
-
-#### File Processing
-- Automatic text extraction and indexing
-- Vector embeddings for semantic search
-- Real-time processing status updates
-- Secure cloud storage with public access URLs
-
-### 💬 Chat Interface
-
-#### Welcome Screen
-- Feature mode selection with visual cards
-- Example prompts for quick start
-- Quick action buttons for common tasks
-- Professional Google AI Studio inspired design
-
-#### Chat Features
-- **Real-time messaging** with typing indicators
-- **File attachment** with preview and removal
-- **Message history** with conversation persistence
-- **Export/Share** functionality for conversations
-- **Responsive design** for mobile and desktop
-
-## 🔧 API Documentation
-
-### Authentication Endpoints
-
-```http
-POST /api/v1/users/register
-POST /api/v1/users/login
-POST /api/v1/users/logout
-GET  /api/v1/users/current-user
-POST /api/v1/users/refresh-token
-```
-
-### Conversation Management
-
-```http
-GET    /api/v1/conversations
-POST   /api/v1/conversations
-GET    /api/v1/conversations/:id
-DELETE /api/v1/conversations/:id
-PATCH  /api/v1/conversations/:id/feature
-PATCH  /api/v1/conversations/:id/title
-```
-
-### Messaging
-
-```http
-POST /api/v1/conversations/:id/messages
-```
-
-### Document Upload
-
-```http
-POST /api/v1/documents/upload          # Regular upload (<10MB)
-POST /api/v1/documents/upload-s3       # S3 direct upload (>10MB)
-POST /api/v1/s3/generate-presigned-url # Generate S3 upload URL
-```
-
-### AI Processing (Python Service)
-
-```http
-POST /api/v1/query              # Process chat queries
-POST /api/v1/process-document   # Process uploaded documents
-POST /api/v1/delete-documents   # Cleanup documents
-```
-
-## 🚀 Deployment
-
-### Frontend Deployment (Vercel/Netlify)
-
-1. Build the frontend:
-```bash
-cd Frontend
-npm run build
-```
-
-2. Deploy to Vercel:
-```bash
-vercel --prod
-```
-
-### Backend Deployment (AWS Lambda)
-
-1. Configure AWS credentials
-2. Deploy Node.js backend:
-```bash
-cd Node-Backend
-serverless deploy
-```
-
-3. Deploy Python backend:
-```bash
-cd Python-Backend
-serverless deploy
-```
-
-### Environment Variables for Production
-
-Update your production environment variables with:
-- Production database URLs
-- Production API endpoints
-- Production AWS credentials
-- Production API keys
-
-## 🔒 Security Features
-
-- **JWT Authentication** with access and refresh tokens
-- **CORS Protection** with configurable origins
-- **Input Validation** using express-validator
-- **File Upload Security** with type and size restrictions
-- **Environment Variable Protection** for sensitive data
-- **AWS IAM Roles** for secure cloud resource access
-
-## 🧪 Testing
-
-### Run Frontend Tests
-```bash
-cd Frontend
-npm run test
-```
-
-### Run Backend Tests
-```bash
-cd Node-Backend
-npm run test
-```
-
-### Run Python Tests
-```bash
-cd Python-Backend
-pytest
-```
-
-## 📊 Monitoring & Analytics
-
-- **Error Tracking**: Comprehensive error handling and logging
-- **Performance Monitoring**: Response time tracking
-- **Usage Analytics**: User interaction metrics
-- **Document Processing Stats**: Upload and processing statistics
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Follow ESLint configuration for JavaScript/React
-- Use Black formatter for Python code
-- Write comprehensive tests for new features
-- Update documentation for API changes
-- Follow conventional commit messages
-
-## 📝 License
-
-This project is licensed under the ISC License - see the [LICENSE](LICENSE) file for details.
-
-## 👥 Team
-
-**Team CKsDev**
-- Full-stack development
-- AI/ML integration
-- Cloud architecture
-- UI/UX design
-
-## 🆘 Support
-
-For support and questions:
-
-- 📧 Email: support@cksfinbot.com
-- 💬 Discord: [Join our community](https://discord.gg/cksfinbot)
-- 📖 Documentation: [docs.cksfinbot.com](https://docs.cksfinbot.com)
-- 🐛 Issues: [GitHub Issues](https://github.com/your-username/CKsFinBot/issues)
-
-<!-- ## 🗺️ Roadmap
-
-### Version 2.0 (Coming Soon)
-- [ ] Real-time collaboration features
-- [ ] Advanced charting and visualization
-- [ ] Integration with financial data APIs
-- [ ] Mobile app development
-- [ ] Advanced AI model fine-tuning
-
-### Version 2.1
-- [ ] Multi-language support
-- [ ] Voice interaction capabilities
-- [ ] Advanced security features
-- [ ] Enterprise SSO integration -->
+> **AI-Powered Cloud Infrastructure Anomaly Detection & Automated Remediation**  
+> A full-stack, cloud-native platform that uses a Graph Neural Network (GNN) to detect anomalies across distributed AWS infrastructure in real time, explain *why* an anomaly occurred using XAI, and trigger automated remediation.
 
 ---
 
-<div align="center">
+## 📋 Table of Contents
 
-**Made with ❤️ by Team CKsDev**
+- [Project Overview](#-project-overview)
+- [System Architecture](#-system-architecture)
+- [Tech Stack](#-tech-stack)
+- [ML/DL Models](#-mldl-models)
+- [Cloud Services Used](#-cloud-services-used)
+- [Microservices Breakdown](#-microservices-breakdown)
+- [System Workflow (End-to-End)](#-system-workflow-end-to-end)
+- [Frontend Pages & Components](#-frontend-pages--components)
+- [API Endpoints](#-api-endpoints)
+- [Infrastructure as Code](#-infrastructure-as-code)
+- [Directory Structure](#-directory-structure)
+- [Getting Started](#-getting-started)
 
-[⭐ Star this repo](https://github.com/your-username/CKsFinBot) | [🐛 Report Bug](https://github.com/your-username/CKsFinBot/issues) | [💡 Request Feature](https://github.com/your-username/CKsFinBot/issues)
+---
 
-</div>
+## 🌐 Project Overview
+
+CloudAutomationGNN monitors live AWS cloud resources (EC2, Lambda, RDS, ELB, S3) by continuously ingesting CloudWatch metrics. These metrics are modelled as a **graph** — each cloud resource is a node, interconnected by service dependencies — and a trained **GraphSAGE** GNN classifies every node as *normal* or *anomalous*.
+
+When an anomaly is detected:
+1. The system identifies **why** (SHAP + GNNExplainer XAI).
+2. It publishes a real-time alert to the frontend via **WebSocket**.
+3. Automated remediation actions are triggered and logged.
+4. A natural-language explanation is generated by **Google Gemini** (via LangChain RAG).
+
+---
+
+## 🏗️ System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         USER BROWSER (React)                            │
+│  Dashboard │ Alerts │ XAI Panel │ Automation Logs │ AI Chat             │
+└───────────────────────┬─────────────────────────────────────────────────┘
+                        │  REST API + WebSocket (WSS)
+                        ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│              Node.js Backend  (AWS Lambda via Serverless)               │
+│                                                                         │
+│   ┌─────────────┐  ┌──────────────────┐  ┌──────────────────────────┐  │
+│   │ REST API    │  │ Event Processor  │  │  WebSocket Handlers      │  │
+│   │ (Express)   │  │ (EventBridge/SQS)│  │  (connect/disconnect/    │  │
+│   │             │  │                  │  │   SNS→WS subscriber)     │  │
+│   └──────┬──────┘  └────────┬─────────┘  └──────────────────────────┘  │
+└──────────┼──────────────────┼──────────────────────────────────────────┘
+           │                  │
+           │ HTTP             │ HTTP
+           ▼                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                  Python FastAPI Backend (Docker / ECS)                  │
+│                                                                         │
+│   ┌────────────────┐  ┌──────────────┐  ┌──────────────────────────┐   │
+│   │ GNN Inference  │  │ XAI Service  │  │  LLM / RAG Service       │   │
+│   │ (GraphSAGE)    │  │ (SHAP +      │  │  (Gemini + LangChain +   │   │
+│   │                │  │  GNNExplainer│  │   Pinecone + HuggingFace)│   │
+│   └────────────────┘  └──────────────┘  └──────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
+           │                  │
+           ▼                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        AWS Cloud Services                               │
+│                                                                         │
+│  CloudWatch → EventBridge → SQS → Lambda (eventProcessor)              │
+│  DynamoDB (anomalies + WS connections)                                  │
+│  SNS → Lambda (snsToWebSocket) → API Gateway WebSocket → Browser       │
+│  S3 (GNN model artifacts + frontend hosting)                            │
+│  MongoDB Atlas (users, events, anomalies, conversations)                │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | React (Vite), Recharts, D3/Force Graph, CSS, Socket.IO |
+| **Node Backend** | Node.js, Express, Serverless Framework, AWS Lambda |
+| **Python Backend** | FastAPI, PyTorch Geometric, SHAP, LangChain, Docker |
+| **ML Model** | GraphSAGE (PyTorch Geometric) |
+| **XAI** | GNNExplainer, SHAP KernelExplainer |
+| **LLM / RAG** | Google Gemini 2.5, LangChain (LCEL), HuggingFace Embeddings |
+| **Vector DB** | Pinecone |
+| **App Database** | MongoDB Atlas (Mongoose ODM) |
+| **AWS Services** | Lambda, API Gateway, EventBridge, SQS, SNS, DynamoDB, CloudWatch, S3 |
+| **IaC** | Terraform (AWS provider ~5.70), Serverless Framework v3+ |
+| **Auth** | JWT (Access + Refresh tokens), HTTP-only cookies |
+
+---
+
+## 🧠 ML/DL Models
+
+### 1. GraphSAGE — Anomaly Detector (Primary Model)
+
+**File:** `Python-Backend/app/services/gnn_model.py` | **Trained:** `ML/train_gnn.py`
+
+GraphSAGE (Graph Sample and Aggregate) is a graph neural network that learns node representations by aggregating features from a node's local neighbourhood. It is ideal for this use-case because cloud resources are inherently relational — an EC2 instance's anomalous behaviour is often caused by or propagated from upstream Lambda functions or RDS databases.
+
+```
+Architecture:
+  Input (5 node features)
+    → SAGEConv Layer 1  (64 units) → ReLU → Dropout(0.3)
+    → SAGEConv Layer 2  (32 units) → ReLU → Dropout(0.3)
+    → SAGEConv Layer 3  ( 1 unit ) → Sigmoid
+  Output: per-node anomaly probability ∈ [0, 1]
+```
+
+**Node features (5 per node):**
+
+| Feature | Description |
+|---|---|
+| `cpu` | CPU utilization (%) |
+| `memory` | Memory utilization (%) |
+| `latency` | Request latency (ms) |
+| `error_rate` | Fraction of failed requests |
+| `request_count` | Requests per minute |
+
+**Training details:**
+- **Dataset:** Synthetic cloud infrastructure graphs (`ML/data_generator.py`)  
+- **Loss:** Binary Cross-Entropy (`BCELoss`) with positive class weighting for imbalanced anomaly labels  
+- **Optimizer:** Adam (lr=0.01, weight_decay=5e-4)  
+- **Epochs:** 200  
+- **Threshold:** 0.5 → ANOMALY  
+- **Metrics:** Accuracy + F1 Score  
+- **Saved model:** `ML/models/gnn_model.pt` (uploaded to S3 for inference)
+
+**Severity thresholds (score → label):**
+
+| Score Range | Severity |
+|---|---|
+| ≥ 0.85 | CRITICAL |
+| ≥ 0.65 | HIGH |
+| ≥ 0.35 | MEDIUM |
+| < 0.35 | LOW |
+
+---
+
+### 2. GNNExplainer — Subgraph Explainability
+
+**File:** `Python-Backend/app/services/xai_service.py`
+
+GNNExplainer (from `torch_geometric.explain`) runs 200 optimisation epochs to identify which **features** and **edges** (neighbouring nodes) most contributed to the GNN's anomaly prediction for a specific node.
+
+- Outputs a **feature mask** `[N, F]` — importance weight per feature per node  
+- Outputs an **edge mask** `[E]` — importance weight per edge  
+- Edges with mask value ≥ 0.5 form the **important subgraph** shown in the cascade path
+
+---
+
+### 3. SHAP KernelExplainer — Feature Attribution
+
+**File:** `Python-Backend/app/services/xai_service.py`
+
+SHAP (SHapley Additive exPlanations) KernelExplainer treats the GNN as a black-box function and estimates each feature's marginal contribution to the anomaly score.
+
+- **Background baseline:** mean feature vector of all graph nodes (representing a healthy node)  
+- **Samples:** 64 perturbations per explanation  
+- **Fallback:** If model outputs are degenerate (near-zero variance), attribution reverts to `|z-score|` deviation from training baseline — always produces meaningful, distinct values  
+- **Final importance:** `sqrt(SHAP × GNNExplainer mask)` — a geometric blend of both methods
+
+---
+
+### 4. Google Gemini (LLM) + LangChain RAG — Natural Language Explanations
+
+**File:** `Python-Backend/app/services/llm_service.py`
+
+When a user requests an explanation of an anomaly, the SHAP scores and GNN output are fed into a LangChain RAG pipeline:
+
+1. **Retrieval:** HuggingFace `sentence-transformers/all-MiniLM-L6-v2` embeds the query and retrieves relevant cloud runbook documents from **Pinecone** vector store  
+2. **Generation:** **Google Gemini 2.5** generates a natural-language explanation using the retrieved context + anomaly details  
+3. **Pipeline routing:** LCEL (LangChain Expression Language) routes queries to `Smart_Chat`, `Document_Analysis`, `Analytical_Insights`, or `General_Conversation` pipelines based on `feature_mode`
+
+---
+
+## ☁️ Cloud Services Used
+
+### AWS Services
+
+| Service | Purpose |
+|---|---|
+| **AWS Lambda** | Serverless compute for REST API, Event Processor, and WebSocket handlers |
+| **API Gateway (HTTP)** | Exposes all REST endpoints (`/anomalies`, `/events`, `/graph`, etc.) |
+| **API Gateway (WebSocket)** | Real-time bidirectional communication channel to browser clients |
+| **EventBridge** | Rule-based event bus — triggers on `CloudWatch Alarm State Change` and periodic metric-poll schedule |
+| **SQS** | Decoupled event queue between EventBridge and the `eventProcessor` Lambda (batch window: 30s, batch size: 10) |
+| **SQS Dead Letter Queue** | Captures failed events (max 3 receive attempts, retained 14 days) |
+| **SNS** | Publishes anomaly alerts; the `snsToWebSocket` Lambda subscribes and fans out to all WebSocket connections |
+| **DynamoDB** | Stores: (1) GNN anomaly results keyed by `partitionKey/sortKey`, (2) WebSocket `connectionId` records with TTL |
+| **CloudWatch** | Source of alarm state-change events; `DescribeAlarms` API polled directly for live alerts |
+| **S3** | (1) Model artifact bucket (versioned, AES-256 encrypted, private) — hosts `gnn_model.pt`; (2) Frontend static hosting bucket (React SPA) |
+| **IAM** | Fine-grained Lambda execution roles for SNS publish, DynamoDB CRUD, EventBridge emit, SQS consume, CloudWatch read, API Gateway connections |
+
+### External Cloud Services
+
+| Service | Purpose |
+|---|---|
+| **MongoDB Atlas** | Primary application database — stores Users, Events, Anomalies, Conversations, Documents |
+| **Pinecone** | Vector database for RAG document retrieval (index: `cksfinbot`, dynamic namespace per uploaded document) |
+| **Google AI (Gemini)** | `gemini-2.5-flash-lite` LLM for natural language anomaly explanations |
+| **HuggingFace** | `all-MiniLM-L6-v2` embedding model (runs locally in Python container) |
+
+---
+
+## 🔧 Microservices Breakdown
+
+The system is composed of **5 Lambda functions** and **1 Python FastAPI service**:
+
+---
+
+### Lambda 1 — `app` (REST API Handler)
+
+**Handler:** `lambda.js` → `src/app.js`  
+**Trigger:** API Gateway HTTP (ANY `*`)  
+**Memory:** 512 MB | **Timeout:** 29s
+
+Express.js application exposed as a Lambda function via `serverless-http`. Handles all client-facing REST operations.
+
+**Routes & Controllers:**
+
+| Route | Controller | Purpose |
+|---|---|---|
+| `POST /users/register` | `user.controller` | Create user account |
+| `POST /users/login` | `user.controller` | Authenticate, issue JWT cookies |
+| `GET /anomalies` | `anomaly.controller` | Paginated anomaly list (DB + live CloudWatch merge) |
+| `GET /anomalies/:id/explain` | `anomaly.controller` | GNN + SHAP explanation for a specific anomaly |
+| `PATCH /anomalies/:id/resolve` | `anomaly.controller` | Mark anomaly as resolved |
+| `GET /anomalies/stats` | `anomaly.controller` | Severity distribution stats |
+| `GET /events` | `events.controller` | Paginated cloud metric events |
+| `GET /graph` | `graph.controller` | Resource graph topology for D3 visualisation |
+| `POST /automation/trigger` | `automation.controller` | Trigger GNN-recommended remediation |
+| `GET /automation/logs` | `automation.controller` | Automation action history |
+| `POST /conversation` | `conversation.controller` | Initiate RAG chat with LLM |
+| `POST /document/upload` | `document.controller` | Upload runbook to S3 + index in Pinecone |
+| `GET /s3/signed-url` | `s3.controller` | Generate pre-signed S3 URL for file access |
+
+---
+
+### Lambda 2 — `eventProcessor` (GNN Metric Ingestion)
+
+**Handler:** `src/eventProcessor.js`  
+**Triggers:** EventBridge (`cloud-metrics-rule`) + SQS batch  
+**Memory:** 256 MB | **Timeout:** 60s
+
+The core real-time data pipeline. Each time an EventBridge event or SQS message arrives:
+
+1. **Parse** the raw event (CloudWatch Alarm or custom `CloudMetricEvent`)  
+2. **Persist** the metric event to MongoDB (hydrates the frontend graph)  
+3. **Forward** to Python GNN service (`POST /predict/single`)  
+4. If anomaly detected → **persist** to DynamoDB + MongoDB  
+5. For `critical`/`high` → **publish** to SNS  
+
+---
+
+### Lambda 3 — `wsConnect`
+
+**Handler:** `src/Handlers/websocketHandlers.connect`  
+**Trigger:** WebSocket `$connect` route  
+
+Stores the new `connectionId` in the `cloud-automation-ws-connections-dev` DynamoDB table with a TTL so stale connections are automatically cleaned up.
+
+---
+
+### Lambda 4 — `wsDisconnect`
+
+**Handler:** `src/Handlers/websocketHandlers.disconnect`  
+**Trigger:** WebSocket `$disconnect` route  
+
+Removes the `connectionId` record from DynamoDB when a browser disconnects.
+
+---
+
+### Lambda 5 — `snsToWebSocket` (Real-Time Alert Fan-out)
+
+**Handler:** `src/Handlers/snsSubscriber.handler`  
+**Trigger:** SNS topic subscription  
+
+When SNS receives a critical anomaly notification:
+1. Scans DynamoDB for **all active WebSocket connection IDs**  
+2. Uses `@aws-sdk/client-apigatewaymanagementapi` to POST the anomaly payload to **every connected browser** simultaneously
+
+---
+
+### Python FastAPI Service
+
+**Entry:** `Python-Backend/app/main.py`  
+**Deployment:** Docker container (Dockerfile included)  
+**Base URL:** configured via `PYTHON_SERVICE_URL` env var
+
+| Endpoint | Description |
+|---|---|
+| `POST /predict/single` | Run GNN inference on one cloud node |
+| `POST /predict/graph` | Run GNN inference on a full resource graph |
+| `POST /explain` | Generate SHAP + GNNExplainer XAI explanation |
+| `POST /chat` | Invoke LangChain RAG with Gemini LLM |
+| `POST /document/process` | Chunk and embed uploaded documents into Pinecone |
+
+**Internal services:**
+
+| File | Responsibility |
+|---|---|
+| `gnn_model.py` | GraphSAGE model definition + `load_model()` helper |
+| `graph_builder.py` | Convert raw node/edge lists → PyTorch Geometric `Data` object |
+| `gnn_inference.py` | Load model from S3/disk + run forward pass |
+| `xai_service.py` | GNNExplainer + SHAP KernelExplainer orchestration |
+| `explanation_builder.py` | Format XAI outputs into frontend-ready JSON |
+| `llm_service.py` | LangChain LCEL pipelines (Smart Chat, Document Analysis, etc.) |
+| `document_processor.py` | PDF/text chunking and embedding for Pinecone indexing |
+| `s3_service.py` | Upload/download model artifacts from S3 |
+| `pinecone_service.py` | Pinecone client initialisation |
+
+---
+
+## 🔄 System Workflow (End-to-End)
+
+### Workflow 1 — Real-Time Anomaly Detection (Happy Path)
+
+```
+1. AWS CloudWatch detects a metric threshold breach (e.g., EC2 CPU > 90%)
+   └─► Emits CloudWatch Alarm State Change event
+
+2. EventBridge rule (cloud-metrics-rule) matches the event
+   └─► Routes to SQS event queue  (OR directly triggers Lambda 2)
+
+3. Lambda 2 (eventProcessor) processes the SQS batch
+   ├─► Parses & normalises the CloudMetricEvent payload
+   ├─► Saves Event record to MongoDB (graph hydration)
+   └─► Calls Python FastAPI:  POST /predict/single
+         └─► graph_builder.py builds PyG Data object (normalised features + self-loop edges)
+         └─► GraphSAGE.forward() → anomaly_score ∈ [0,1]
+         └─► Returns { is_anomaly: true, anomaly_score: 0.91, ... }
+
+4. If is_anomaly == true:
+   ├─► Persist anomaly to DynamoDB (7-day TTL)
+   ├─► Persist anomaly to MongoDB (UI stats)
+   └─► If severity ∈ {critical, high}:
+         └─► SNS.publish(anomaly alert)
+
+5. SNS triggers Lambda 5 (snsToWebSocket)
+   ├─► Scan DynamoDB for all active WS connectionIds
+   └─► POST anomaly payload to each connected browser via APIGW Execution API
+
+6. Browser receives WebSocket message → React updates Dashboard in real time
+   ├─► ResourceGraph re-renders with anomalous node highlighted (red)
+   ├─► AlertCard appears in Alerts page
+   └─► MetricsChart spikes visible
+```
+
+---
+
+### Workflow 2 — XAI Explanation Request
+
+```
+1. User clicks "Explain" on an alert card in the browser
+
+2. Browser:  GET /anomalies/:id/explain  →  Node.js Lambda 1
+
+3. Node.js Lambda:
+   ├─► If alarm ID starts with "aws-alarm-":
+   │     └─► Derive attack-specific metrics from alarm name pattern
+   │     └─► Compute local metric-deviation SHAP (baseline comparison)
+   └─► POST /explain to Python FastAPI with node metrics + edges
+
+4. Python FastAPI /explain:
+   ├─► graph_builder.py → builds PyG Data from request payload
+   ├─► gnn_model.load_model() → loads GraphSAGE from disk
+   │
+   ├─► Step 1: GNNExplainer (200 epochs of mask optimisation)
+   │     └─► Outputs feature mask [N, F] + edge mask [E]
+   │     └─► Identifies which neighbouring nodes matter (important subgraph)
+   │
+   ├─► Step 2: SHAP KernelExplainer (64 perturbation samples)
+   │     ├─► model_predict() isolates target node feature, runs full graph GNN
+   │     ├─► Detects degenerate output (variance < 1e-6) → falls back to |z-score|
+   │     └─► Blends SHAP × GNNExplainer mask: importance = sqrt(shap * gnn_mask)
+   │
+   └─► Returns { feature_importance, important_nodes, important_edges }
+
+5. Node.js Lambda:
+   ├─► Checks if Python SHAP is degenerate (all equal values) → uses local SHAP
+   ├─► Formats response: { shapValues, cascadePath, nlExplanation, actionStatus }
+   └─► Caches explanation to MongoDB anomaly record
+
+6. Browser XAI Panel displays:
+   ├─► SHAP bar chart (feature importances)
+   ├─► Cascade path (important subgraph nodes)
+   └─► Natural language explanation
+```
+
+---
+
+### Workflow 3 — LLM Chat / RAG Query
+
+```
+1. User types a question in the AI Chat panel
+
+2. Browser: POST /conversation → Node.js → Python FastAPI POST /chat
+
+3. Python FastAPI:
+   ├─► HuggingFace all-MiniLM-L6-v2 embeds the question
+   ├─► Pinecone retrieves top-k relevant runbook chunks (dynamic k = 15% of namespace size)
+   ├─► LangChain LCEL chain: context → PromptTemplate → Gemini 2.5 → StrOutputParser
+   └─► Returns natural language answer
+
+4. Browser: streams response into chat UI
+```
+
+---
+
+### Workflow 4 — WebSocket Connection Lifecycle
+
+```
+1. Browser connects to WSS://  (API Gateway WebSocket URL)
+   └─► Lambda 3 (wsConnect): DynamoDB.PutItem(connectionId, TTL)
+
+2. Browser stays connected — receives real-time anomaly pushes (Workflow 1, step 5)
+
+3. Browser disconnects (page close / network loss)
+   └─► Lambda 4 (wsDisconnect): DynamoDB.DeleteItem(connectionId)
+```
+
+---
+
+### Workflow 5 — Model Training & Deployment
+
+```
+1. Generate synthetic cloud graph data
+   └─► python ML/data_generator.py  →  ML/data/graph_data.pt
+
+2. Train GraphSAGE
+   └─► python ML/train_gnn.py
+         ├─► 200 epochs, Adam, BCELoss with class weighting
+         ├─► Saves best checkpoint:  ML/models/gnn_model.pt
+         └─► Saves loss curve:      ML/reports/training_loss.png
+
+3. Upload model artifact to S3
+   └─► python ML/upload_model.py  →  s3://cloud-automation-gnn-model-dev/gnn_model.pt
+
+4. Python API loads model at startup from S3 (or local disk for dev)
+```
+
+---
+
+## 🖥 Frontend Pages & Components
+
+### Pages
+
+| Page | Route | Description |
+|---|---|---|
+| `LandingPage` | `/` | Marketing landing page with animated background |
+| `LoginPage` | `/login` | JWT auth login form |
+| `SignupPage` | `/signup` | User registration with email verification |
+| `DashboardPage` | `/dashboard` | Main monitoring hub — graph + metrics |
+| `AlertsPage` | `/alerts` | Paginated anomaly alert list with severity tabs |
+
+### Key Components
+
+| Component | Description |
+|---|---|
+| `ResourceGraph` | D3 force-directed graph of cloud nodes with live anomaly highlighting |
+| `MetricsChart` | Recharts time-series chart for CPU/Memory/Latency/Error Rate |
+| `XAIPanel` | SHAP bar chart + cascade path + NL explanation panel |
+| `AlertCard` | Individual anomaly card with severity badge + Explain button |
+| `AutomationLog` | Real-time log of automated remediation actions |
+| `WelcomeScreen` | AI-powered welcome after login |
+| `NodeDetailModal` | Click-through modal with per-node live metrics |
+| `ChatInput` / `Message` | AI chat interface with Markdown rendering |
+| `EnhancedFileUpload` | Drag-and-drop document upload for RAG indexing |
+
+### Real-Time Layer (Frontend)
+
+- **Primary:** WebSocket connection to API Gateway WSS endpoint (`src/services/socket.js`)  
+- **Fallback:** HTTP polling every 30s if WebSocket is unavailable  
+- **Events multiplexed:** `anomaly:new`, `graph:update`, `automation:log`, `metrics:update`
+
+---
+
+## 📡 API Endpoints
+
+### Node.js REST API (via API Gateway)
+
+```
+Auth
+  POST   /users/register          Register new user
+  POST   /users/login             Login (returns JWT cookies)
+  POST   /users/logout            Clear auth cookies
+  GET    /users/me                Get current user profile
+
+Anomalies
+  GET    /anomalies               List anomalies (paginated, filtered)
+  GET    /anomalies/stats         Severity distribution stats
+  GET    /anomalies/:id           Single anomaly detail
+  GET    /anomalies/:id/explain   GNN + SHAP + NL explanation
+  PATCH  /anomalies/:id/resolve   Mark anomaly as resolved
+
+Events (Cloud Metric Events)
+  GET    /events                  Paginated cloud metric event log
+
+Graph
+  GET    /graph                   Resource graph topology (nodes + edges)
+
+Automation
+  POST   /automation/trigger      Trigger automated remediation
+  GET    /automation/logs         Remediation action log
+
+Conversations (RAG Chat)
+  POST   /conversation            Start / continue AI chat session
+  GET    /conversation/:id        Retrieve chat history
+
+Documents (RAG Indexing)
+  POST   /document/upload         Upload + embed document in Pinecone
+  GET    /s3/signed-url           Generate S3 pre-signed download URL
+```
+
+### Python FastAPI
+
+```
+  POST   /predict/single          GNN inference (1 node)
+  POST   /predict/graph           GNN inference (full graph)
+  POST   /explain                 XAI: SHAP + GNNExplainer
+  POST   /chat                    LangChain RAG + Gemini
+  POST   /document/process        Chunk + embed document → Pinecone
+```
+
+---
+
+## 🏗 Infrastructure as Code
+
+### Terraform (`infra/`)
+
+Manages core, long-lived AWS resources:
+
+| Resource | Description |
+|---|---|
+| `aws_s3_bucket.model_bucket` | GNN model artifacts (versioned + AES-256 encrypted) |
+| `aws_s3_bucket.frontend_bucket` | React SPA static hosting |
+| `aws_sqs_queue.event_queue` | Main event queue (long-polling, 1-day retention) |
+| `aws_sqs_queue.event_dlq` | Dead-letter queue (14-day retention, max 3 retries) |
+| `aws_cloudwatch_event_rule.cloudwatch_alarm_rule` | EventBridge rule: CloudWatch ALARM state changes |
+| `aws_cloudwatch_event_rule.metric_poll_rule` | Periodic metric poll schedule |
+| `aws_cloudwatch_event_target.alarm_to_sqs` | Route EventBridge → SQS |
+| `aws_dynamodb_table.anomaly_table` | Anomaly results (GSI on resourceId + severity) |
+| `aws_dynamodb_table.automation_log_table` | Automation action history |
+| `aws_cloudwatch_log_group` | Lambda log groups with retention policies |
+
+### Serverless Framework (`Node-Backend/serverless.yml`)
+
+Manages Lambda functions and ephemeral AWS resources:
+
+| Resource | Description |
+|---|---|
+| `WsConnectionsTable` | DynamoDB: active WebSocket connection IDs (PAY_PER_REQUEST, TTL-enabled) |
+| `CloudAutomationSnsTopic` | SNS topic for anomaly alerts |
+| `GnnDataTable` | DynamoDB: GNN result store (composite key) |
+
+**Plugins:** `serverless-esbuild` (tree-shaking + source maps), `serverless-offline` (local dev on port 5000)
+
+---
+
+## 📁 Directory Structure
+
+```
+CloudAutomationGNN/
+│
+├── Frontend/                   # React (Vite) SPA
+│   └── src/
+│       ├── JSX/
+│       │   ├── Pages/          # LandingPage, Dashboard, Alerts, Login, Signup
+│       │   └── Components/     # ResourceGraph, MetricsChart, XAIPanel, AlertCard...
+│       ├── services/           # socket.js (WebSocket + polling client)
+│       └── Config/             # API base URL config
+│
+├── Node-Backend/              # Node.js Lambda (Serverless Framework)
+│   ├── src/
+│   │   ├── Controllers/        # anomaly, automation, graph, events, user, s3...
+│   │   ├── Routes/             # Express route definitions
+│   │   ├── Models/             # Mongoose schemas (User, Event, Anomaly, Conversation)
+│   │   ├── Handlers/           # WebSocket handlers + SNS subscriber Lambda
+│   │   ├── Middlewares/        # JWT auth middleware
+│   │   ├── Utils/              # ApiError, ApiResponse, AsyncHandler
+│   │   ├── db/                 # MongoDB Atlas connection
+│   │   ├── eventProcessor.js   # Lambda 2: EventBridge/SQS → GNN → DynamoDB/SNS
+│   │   └── app.js              # Express app factory
+│   ├── serverless.yml          # 5 Lambda function definitions + IAM + resources
+│   └── lambda.js               # serverless-http adapter
+│
+├── Python-Backend/            # FastAPI GNN + XAI + LLM service
+│   ├── app/
+│   │   ├── api/                # FastAPI route handlers
+│   │   ├── core/               # Config, model loader (singleton)
+│   │   ├── schemas/            # Pydantic request/response models
+│   │   ├── services/
+│   │   │   ├── gnn_model.py    # GraphSAGE architecture
+│   │   │   ├── graph_builder.py# Raw metrics → PyG Data object
+│   │   │   ├── gnn_inference.py# Model loading + forward pass
+│   │   │   ├── xai_service.py  # GNNExplainer + SHAP orchestration
+│   │   │   ├── llm_service.py  # LangChain LCEL pipelines (Gemini)
+│   │   │   ├── document_processor.py # PDF chunking + Pinecone indexing
+│   │   │   └── s3_service.py   # S3 model artifact I/O
+│   │   ├── prompts.py          # LangChain prompt templates
+│   │   └── main.py             # FastAPI app entry point
+│   └── Dockerfile              # Container definition for Python service
+│
+├── ML/                        # Offline training pipeline
+│   ├── data_generator.py       # Synthetic cloud graph data generator
+│   ├── train_gnn.py            # GraphSAGE training script
+│   ├── evaluate.py             # Model evaluation utilities
+│   ├── upload_model.py         # Upload gnn_model.pt to S3
+│   ├── generate_fake_metrics.py# Fake metric generation for testing
+│   ├── data/                   # graph_data.pt (generated)
+│   ├── models/                 # gnn_model.pt (trained checkpoint)
+│   └── reports/                # training_loss.png
+│
+├── infra/                     # Terraform IaC
+│   ├── main.tf                 # Core AWS resources (S3, SQS, DynamoDB, EventBridge)
+│   ├── lambda.tf               # Lambda-specific Terraform resources
+│   └── variables.tf            # Input variable definitions
+│
+└── Database/                  # MongoDB schema reference / seed scripts
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js ≥ 20, Python ≥ 3.10, Docker
+- AWS CLI configured (`aws configure`)
+- Terraform ≥ 1.6
+- Serverless Framework (`npm i -g serverless`)
+- MongoDB Atlas connection URI
+- Pinecone API key, Google AI API key
+
+### 1. Provision Infrastructure (Terraform)
+
+```bash
+cd infra
+terraform init
+terraform apply
+```
+
+### 2. Train & Upload the GNN Model
+
+```bash
+cd ML
+pip install -r requirements.txt
+python data_generator.py
+python train_gnn.py
+python upload_model.py
+```
+
+### 3. Start Python Backend
+
+```bash
+cd Python-Backend
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Or with Docker:
+docker build -t cloud-gnn-python .
+docker run -p 8000:8000 --env-file .env cloud-gnn-python
+```
+
+### 4. Start Node.js Backend (local dev)
+
+```bash
+cd Node-Backend
+cp .env.example .env   # fill in your values
+npm install
+npx serverless offline
+# API available at http://localhost:5000
+```
+
+### 5. Start Frontend
+
+```bash
+cd Frontend
+npm install
+npm run dev
+# App available at http://localhost:5173
+```
+
+### 6. Deploy to AWS
+
+```bash
+# Deploy Node.js Lambdas
+cd Node-Backend
+npx serverless deploy --stage dev
+
+# Deploy Frontend to S3
+# (see .agents/workflows/deploy-frontend.md)
+```
+
+---
+
+## 👥 Team
+
+**CloudAutomationGNN** — 6th Semester Cloud Computing Project  
+> Built with PyTorch Geometric, AWS Serverless, and a healthy obsession with graph theory.
