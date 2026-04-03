@@ -60,8 +60,10 @@ provider:
             - dynamodb:BatchWriteItem
             - dynamodb:DescribeTable
           Resource:
-            - !Sub 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}'
-            - !Sub 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}/index/*'
+            - !GetAtt GnnDataTable.Arn
+            - !Join [ '/', [ !GetAtt GnnDataTable.Arn, 'index/*' ] ]
+            - !GetAtt WsConnectionsTable.Arn
+            - !Join [ '/', [ !GetAtt WsConnectionsTable.Arn, 'index/*' ] ]
 
         # ── EventBridge: emit cloud-metric events ────────────────────────────
         - Effect: Allow
