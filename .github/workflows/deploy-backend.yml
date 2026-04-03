@@ -38,6 +38,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Conditionally Skip Existing Resources
+        run: |
+          if aws sqs get-queue-url --queue-name cloud-automation-gnn-dev-event-queue >/dev/null 2>&1; then
+            echo "AWS resources already exist. Trimming serverless.yml to avoid AlreadyExistsException..."
+            sed -i '/# --- LEGACY RESOURCES START ---/,$d' serverless.yml
+          else
+            echo "Resources do not exist. Serverless will create them."
+          fi
+
       # Note: We pass the environment variables required by your serverless.yml
       # directly into the deploy step from GitHub Actions Secrets.
       - name: Serverless Deploy

@@ -280,3 +280,32 @@ resources:
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true
+
+    # --- LEGACY RESOURCES START ---
+    CloudAutomationSnsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: cloud-automation-events-${self:provider.stage}
+
+    GnnDataTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: cloud-automation-gnn-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: partitionKey
+            AttributeType: S
+          - AttributeName: sortKey
+            AttributeType: S
+        KeySchema:
+          - AttributeName: partitionKey
+            KeyType: HASH
+          - AttributeName: sortKey
+            KeyType: RANGE
+
+    EventQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: cloud-automation-gnn-${self:provider.stage}-event-queue
+        VisibilityTimeout: 90
+        MessageRetentionPeriod: 86400
