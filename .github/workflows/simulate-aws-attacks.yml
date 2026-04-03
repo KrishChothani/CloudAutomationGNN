@@ -1,0 +1,77 @@
+name: Simulate AWS Cloud Attacks (Demo)
+
+on:
+  workflow_dispatch:
+    inputs:
+      attackType:
+        description: 'Type of Demo Attack to Simulate'
+        required: true
+        default: 'cpu_spike'
+        type: choice
+        options:
+          - cpu_spike
+          - memory_leak
+          - network_ddos
+
+jobs:
+  simulate-attacks:
+    name: Generate AWS CloudWatch Alarms & Events
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: 1. Create & Trigger AWS CloudWatch Alarm
+        run: |
+          ALARM_NAME="GNN-Demo-Attack-${{ github.event.inputs.attackType }}"
+          
+          echo "🛠️ Creating CloudWatch Metric Alarm: $ALARM_NAME..."
+          aws cloudwatch put-metric-alarm \
+            --alarm-name "$ALARM_NAME" \
+            --metric-name CPUUtilization \
+            --namespace AWS/EC2 \
+            --statistic Average \
+            --period 60 \
+            --threshold 90 \
+            --comparison-operator GreaterThanThreshold \
+            --evaluation-periods 1
+            
+          echo "🚨 Forcing CloudWatch Alarm into ALARM state (Directly readable by Frontend!)..."
+          aws cloudwatch set-alarm-state \
+            --alarm-name "$ALARM_NAME" \
+            --state-value ALARM \
+            --state-reason "Simulated ${{ github.event.inputs.attackType }} exceeded 95% critical threshold!"
+
+      - name: 2. Emit EventBridge Payload (Triggers Backend WebSockets)
+        run: |
+          # Customize metrics based on the selected attack type
+          if [ "${{ github.event.inputs.attackType }}" == "cpu_spike" ]; then
+            METRICS='{"cpuUsage": 99.5, "memoryUsage": 45.2, "latency": 12.1}'
+            RESOURCE="ec2-web-production"
+          elif [ "${{ github.event.inputs.attackType }}" == "memory_leak" ]; then
+            METRICS='{"cpuUsage": 22.1, "memoryUsage": 98.9, "latency": 450.5}'
+            RESOURCE="lambda-auth-service"
+          else
+            METRICS='{"cpuUsage": 80.0, "memoryUsage": 80.0, "latency": 999.9, "requestCount": 50000}'
+            RESOURCE="api-gateway-edge"
+          fi
+          
+          echo "🔥 Firing EventBridge Payload for $RESOURCE..."
+          
+          PAYLOAD=$(cat <<EOF
+          [
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"$RESOURCE\", \"resource_type\": \"AWS Component\", \"metrics\": $METRICS}"
+            }
+          ]
+          EOF
+          )
+          
+          aws events put-events --entries "$PAYLOAD"
+          echo "✅ EventBridge Payload fired! Backend pipeline triggered perfectly."
