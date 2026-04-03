@@ -186,9 +186,9 @@ functions:
               - 'CloudMetricEvent'
               - 'CloudWatch Alarm State Change'
       - sqs:
-          # Reference existing queue by stable ARN — do NOT declare it as a CF resource
+          # Reference existing queue by stable ARN using Serverless variables
           # to avoid CREATE_FAILED "Queue already exists" errors on redeploy
-          arn: !Sub 'arn:aws:sqs:${self:provider.region}:${AWS::AccountId}:cloud-automation-gnn-${self:provider.stage}-event-queue'
+          arn: arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-${self:provider.stage}-event-queue
           batchSize: 10
           maximumBatchingWindow: 30
           functionResponseType: ReportBatchItemFailures
