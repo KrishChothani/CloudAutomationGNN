@@ -139,6 +139,23 @@ export const getAnomalyById = asyncHandler(async (req, res) => {
 // ─── GET /anomalies/:id/explain ───────────────────────────────────────────────
 // Note: route must be registered BEFORE /:id to avoid collision — handled in routes file
 export const getExplanation = asyncHandler(async (req, res) => {
+  // Fix 500 error for Native AWS CloudWatch alarms which are strings not MongoDB UUIDs
+  if (req.params.id.startsWith('aws-alarm-')) {
+    return res.status(200).json(new ApiResponse(200, {
+      anomalyId: req.params.id,
+      resourceName: req.params.id.replace('aws-alarm-', ''),
+      resourceType: 'CloudWatch Alert',
+      anomalyScore: 1.0,
+      shapValues: [
+        { feature: 'Metric Threshold Exceeded', importance: 0.99, direction: 'positive' }
+      ],
+      cascadePath: [{ id: req.params.id.replace('aws-alarm-', ''), label: 'AWS CloudWatch', score: 1.0 }],
+      nlExplanation: 'This is a strictly native AWS CloudWatch Alarm triggered by a metric threshold violation on AWS. It bypassed the GNN pipeline but triggers immediate remediation protocols.',
+      actionTaken: 'Native CloudWatch Action Triggered',
+      actionStatus: 'CRITICAL'
+    }, 'Native CloudWatch explanation mock'))
+  }
+
   const anomaly = await Anomaly.findById(req.params.id).lean()
   if (!anomaly) throw new ApiError(404, 'Anomaly not found')
 

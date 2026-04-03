@@ -27,7 +27,7 @@ jobs:
 
       - name: 1. Create & Trigger AWS CloudWatch Alarm
         run: |
-          ALARM_NAME="GNN-Demo-Attack-${{ github.event.inputs.attackType }}"
+          ALARM_NAME="GNN-Demo-Attack-${{ github.event.inputs.attackType }}-${{ github.run_id }}"
           
           echo "🛠️ Creating CloudWatch Metric Alarm: $ALARM_NAME..."
           aws cloudwatch put-metric-alarm \

@@ -18,6 +18,9 @@ import axios from 'axios'
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb'
 import { SNSClient, PublishCommand }       from '@aws-sdk/client-sns'
 import { randomUUID }                      from 'crypto'
+import connectDB from './db/index.js'
+import Event from './Models/event.model.js'
+import Anomaly from './Models/anomaly.model.js'
 
 const PYTHON_URL      = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000'
 const DYNAMODB_TABLE  = process.env.DYNAMODB_TABLE     || 'cloud-automation-gnn-dev'
@@ -111,6 +114,42 @@ async function persistAnomaly(resourceId, resourceType, prediction) {
   }
 }
 
+// ─── Save event to MongoDB (Hydrates the Frontend Dashboard) ─────────────────
+async function persistEventMongo(resourceId, resourceType, metrics) {
+  try {
+    const ev = await Event.create({
+      resourceId,
+      resourceType,
+      source: 'AWS EventBridge',
+      metrics,
+      processed: true,
+      processedAt: new Date()
+    })
+    return ev._id
+  } catch (err) {
+    console.error('Mongo Event persist failed:', err.message)
+    return null
+  }
+}
+
+async function persistAnomalyMongo(eventId, resourceId, resourceType, prediction) {
+  try {
+    const anomaly = await Anomaly.create({
+      eventId,
+      resourceId,
+      resourceType,
+      score: prediction.anomaly_score,
+      severity: scoreToSeverity(prediction.anomaly_score),
+      explanation: `Detected by Python GNN Service analyzing live EventBridge metrics stream.`,
+      resolved: false
+    })
+    return anomaly._id
+  } catch (err) {
+    console.error('Mongo Anomaly persist failed:', err.message)
+    return null
+  }
+}
+
 // ─── Publish critical anomaly to SNS ─────────────────────────────────────────
 async function notifySNS(resourceId, anomalyScore, severity) {
   if (!SNS_TOPIC_ARN) return
@@ -156,15 +195,23 @@ async function processMetricEvent(payload) {
 
   console.log(`Processing metric event for ${resourceId} (${resourceType})`)
 
-  // 1. GNN inference
+  // 1. Save Event to Mongo to hydrate the UI Graph!
+  const mongoEventId = await persistEventMongo(resourceId, resourceType, metrics)
+
+  // 2. GNN inference
   const prediction = await runGnnInference(resourceId, resourceType, metrics)
   if (!prediction) return
 
-  // 2. Persist if anomaly detected
+  // 3. Persist if anomaly detected
   if (prediction.is_anomaly) {
     const anomalyId = await persistAnomaly(resourceId, resourceType, prediction)
+    
+    // Save anomaly to Mongo to hydrate the UI Stats!
+    if (mongoEventId) {
+      await persistAnomalyMongo(mongoEventId, resourceId, resourceType, prediction)
+    }
 
-    // 3. Notify via SNS for critical/high severity
+    // 4. Notify via SNS for critical/high severity
     const severity = scoreToSeverity(prediction.anomaly_score)
     if (['critical', 'high'].includes(severity)) {
       await notifySNS(resourceId, prediction.anomaly_score, severity)
@@ -178,6 +225,7 @@ async function processMetricEvent(payload) {
 
 // ─── Main Lambda handler ──────────────────────────────────────────────────────
 export const handler = async (event) => {
+  await connectDB()
   console.log('eventProcessor triggered:', JSON.stringify({ source: event.source, type: event['detail-type'] || 'SQS' }))
 
   // ── SQS batch mode ────────────────────────────────────────────────────────
