@@ -50,13 +50,13 @@ jobs:
         run: |
           # Customize metrics based on the selected attack type
           if [ "${{ github.event.inputs.attackType }}" == "cpu_spike" ]; then
-            METRICS='{"cpuUsage": 99.5, "memoryUsage": 45.2, "latency": 12.1}'
+            METRICS='{\"cpuUsage\": 99.5, \"memoryUsage\": 45.2, \"latency\": 12.1}'
             RESOURCE="ec2-web-production"
           elif [ "${{ github.event.inputs.attackType }}" == "memory_leak" ]; then
-            METRICS='{"cpuUsage": 22.1, "memoryUsage": 98.9, "latency": 450.5}'
+            METRICS='{\"cpuUsage\": 22.1, \"memoryUsage\": 98.9, \"latency\": 450.5}'
             RESOURCE="lambda-auth-service"
           else
-            METRICS='{"cpuUsage": 80.0, "memoryUsage": 80.0, "latency": 999.9, "requestCount": 50000}'
+            METRICS='{\"cpuUsage\": 80.0, \"memoryUsage\": 80.0, \"latency\": 999.9, \"requestCount\": 50000}'
             RESOURCE="api-gateway-edge"
           fi
           
