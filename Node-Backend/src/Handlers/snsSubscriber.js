@@ -46,11 +46,28 @@ export const handler = async (event) => {
   for (const connection of connections) {
     const connectionId = connection.connectionId
     for (const msg of messages) {
-      postCalls.push(
-        apigwManagementApi.send(new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: Buffer.from(msg) // msg is already a JSON string from SNS
-        })).catch(async (err) => {
+      
+      // Parse the SNS message and prepare to hydrate the whole UI
+      let eventsToSend = []
+      try {
+        const parsed = JSON.parse(msg)
+        // If it's a native GNN Anomaly passing through, broadcast to all dashboards simultaneously
+        eventsToSend = [
+          JSON.stringify({ type: 'ANOMALY_UPDATE', payload: parsed }),
+          JSON.stringify({ type: 'STATS_UPDATE', payload: parsed }),
+          JSON.stringify({ type: 'GRAPH_UPDATE', payload: parsed }),
+          JSON.stringify({ type: 'METRICS_UPDATE', payload: parsed })
+        ]
+      } catch (e) {
+        eventsToSend = [msg] // fallback
+      }
+
+      for (const eventData of eventsToSend) {
+        postCalls.push(
+          apigwManagementApi.send(new PostToConnectionCommand({
+            ConnectionId: connectionId,
+            Data: Buffer.from(eventData) 
+          })).catch(async (err) => {
           // If connection is stale/gone (410 Gone error), delete from DB
           if (err.$metadata && err.$metadata.httpStatusCode === 410) {
             console.log(`[Cleanup] Removing stale connection: ${connectionId}`)
@@ -64,6 +81,7 @@ export const handler = async (event) => {
         })
       )
     }
+  }
   }
 
   // Await all parallel post calls
