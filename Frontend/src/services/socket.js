@@ -121,9 +121,13 @@ class SocketService {
     }
     this.listeners.get(eventType).add(callback)
 
-    // Auto-connect/poll on first subscriber
     if (!this.isConnected && !this._pollTimer) {
+      // First subscriber ever — start the connection/polling
       this.connect()
+    } else if (this._pollTimer) {
+      // Already polling — fire an immediate tick for THIS new subscriber
+      // so it gets data right away instead of waiting up to 15s
+      try { callback(null) } catch (_) {}
     }
   }
 

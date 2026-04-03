@@ -136,56 +136,91 @@ export default function ResourceGraph({ onNodeClick }) {
   useEffect(() => {
     if (!containerRef.current || graphData.nodes.length === 0) return
 
-    if (sigmaRef.current) {
-      sigmaRef.current.kill()
-      sigmaRef.current = null
+    let renderer = null
+    let observer = null
+
+    const initSigma = () => {
+      const el = containerRef.current
+      if (!el) return
+      const { width, height } = el.getBoundingClientRect()
+      // Don't mount until the container has real pixel dimensions
+      if (width === 0 || height === 0) return
+
+      // Kill previous instance
+      if (sigmaRef.current) {
+        try { sigmaRef.current.kill() } catch (_) {}
+        sigmaRef.current = null
+      }
+      if (renderer) {
+        try { renderer.kill() } catch (_) {}
+      }
+
+      const graph = buildGraph()
+
+      forceAtlas2.assign(graph, { iterations: 100, settings: {
+        gravity: 1, scalingRatio: 8, strongGravityMode: false, barnesHutOptimize: false,
+      }})
+
+      renderer = new Sigma(graph, el, {
+        renderEdgeLabels:   false,
+        defaultEdgeColor:   'rgba(148,163,184,0.2)',
+        defaultNodeColor:   '#6366f1',
+        labelColor:         { color: '#94a3b8' },
+        labelSize:          10,
+        labelWeight:        '500',
+        labelFont:          'Inter, sans-serif',
+        minCameraRatio:     0.3,
+        maxCameraRatio:     3,
+        nodeReducer: (node, attrs) => {
+          const isHovered  = hoveredNode === node
+          const isSelected = selectedNode === node
+          return {
+            ...attrs,
+            size:   isHovered || isSelected ? attrs.size * 1.5 : attrs.size,
+            zIndex: isHovered || isSelected ? 1 : 0,
+          }
+        },
+        edgeReducer: (edge, attrs) => ({ ...attrs }),
+      })
+
+      renderer.on('enterNode', ({ node }) => setHoveredNode(node))
+      renderer.on('leaveNode', ()         => setHoveredNode(null))
+      renderer.on('clickNode', ({ node }) => {
+        setSelectedNode(node)
+        const attrs = graph.getNodeAttributes(node)
+        onNodeClick?.({
+          id:           node,
+          label:        attrs.label,
+          nodeType:     attrs.nodeType,
+          anomalyScore: attrs.anomalyScore,
+          traffic:      attrs.traffic,
+          metrics:      attrs.metrics,
+        })
+      })
+
+      sigmaRef.current = renderer
+
+      // Once successfully mounted, stop observing
+      if (observer) { observer.disconnect(); observer = null }
     }
 
-    const graph = buildGraph()
+    // Try immediately (works if container already has dimensions)
+    initSigma()
 
-    forceAtlas2.assign(graph, { iterations: 100, settings: {
-      gravity: 1, scalingRatio: 8, strongGravityMode: false, barnesHutOptimize: false,
-    }})
-
-    const renderer = new Sigma(graph, containerRef.current, {
-      renderEdgeLabels:   false,
-      defaultEdgeColor:   'rgba(148,163,184,0.2)',
-      defaultNodeColor:   '#6366f1',
-      labelColor:         { color: '#94a3b8' },
-      labelSize:          10,
-      labelWeight:        '500',
-      labelFont:          'Inter, sans-serif',
-      minCameraRatio:     0.3,
-      maxCameraRatio:     3,
-      nodeReducer: (node, attrs) => {
-        const isHovered  = hoveredNode === node
-        const isSelected = selectedNode === node
-        return {
-          ...attrs,
-          size:   isHovered || isSelected ? attrs.size * 1.5 : attrs.size,
-          zIndex: isHovered || isSelected ? 1 : 0,
-        }
-      },
-      edgeReducer: (edge, attrs) => ({ ...attrs }),
-    })
-
-    renderer.on('enterNode', ({ node }) => setHoveredNode(node))
-    renderer.on('leaveNode', ()         => setHoveredNode(null))
-    renderer.on('clickNode', ({ node }) => {
-      setSelectedNode(node)
-      const attrs = graph.getNodeAttributes(node)
-      onNodeClick?.({
-        id:           node,
-        label:        attrs.label,
-        nodeType:     attrs.nodeType,
-        anomalyScore: attrs.anomalyScore,
-        traffic:      attrs.traffic,
-        metrics:      attrs.metrics,
+    // If container has no dimensions yet (flex layout still settling),
+    // observe and retry the moment it gets a real size.
+    if (!sigmaRef.current) {
+      observer = new ResizeObserver(() => {
+        if (!sigmaRef.current) initSigma()
       })
-    })
+      observer.observe(containerRef.current)
+    }
 
-    sigmaRef.current = renderer
-    return () => { renderer.kill() }
+    return () => {
+      if (observer)          { observer.disconnect() }
+      if (sigmaRef.current)  { try { sigmaRef.current.kill() } catch (_) {} sigmaRef.current = null }
+      if (renderer && renderer !== sigmaRef.current) { try { renderer.kill() } catch (_) {} }
+    }
   }, [graphData, layoutKey, buildGraph]) // eslint-disable-line
 
   // ── Tooltip node lookup ────────────────────────────────────────────────────
