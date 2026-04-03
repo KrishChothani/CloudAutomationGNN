@@ -64,12 +64,13 @@ export const createEvent = asyncHandler(async (req, res) => {
 
   // Asynchronously forward to Python GNN service
   try {
-    await axios.post(`${PYTHON_URL}/predict`, {
-      eventId:      event._id.toString(),
-      resourceId:   event.resourceId,
-      resourceType: event.resourceType,
+    const response = await axios.post(`${PYTHON_URL}/predict/single`, {
+      event_id:     event._id.toString(),
+      resource_id:  event.resourceId,
+      resource_type: event.resourceType,
       metrics:      event.metrics,
     }, { timeout: 10000 })
+    console.log('🐍 [events.controller] Python API Response:', JSON.stringify(response.data, null, 2))
   } catch (err) {
     console.warn('⚠️  Python GNN service unavailable:', err.message)
   }

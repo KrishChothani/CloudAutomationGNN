@@ -78,6 +78,7 @@ async function runGnnInference(resourceId, resourceType, metrics) {
       },
       { timeout: 10_000 }
     )
+    console.log('🐍 [eventProcessor] Python API Response:', JSON.stringify(response.data, null, 2))
     return response.data
   } catch (err) {
     console.error(`GNN inference failed for ${resourceId}:`, err.message)

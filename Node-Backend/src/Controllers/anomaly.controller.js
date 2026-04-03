@@ -170,17 +170,28 @@ export const getExplanation = asyncHandler(async (req, res) => {
   // Otherwise call Python XAI service
   try {
     const response = await axios.post(`${PYTHON_URL}/explain`, {
-      anomalyId:  anomaly._id.toString(),
-      resourceId: anomaly.resourceId,
-      score:      anomaly.score,
+      graph_id:   anomaly._id.toString(),
+      nodes: [{
+        node_id: anomaly.resourceId,
+        node_type: anomaly.resourceType,
+        ...anomaly.metrics,
+        cpu_usage: anomaly.metrics?.cpuUsage || 0,
+        memory_usage: anomaly.metrics?.memoryUsage || 0,
+        network_in: anomaly.metrics?.requestCount || 0,
+        network_out: 0,
+        latency: anomaly.metrics?.latency || 0,
+        error_rate: anomaly.metrics?.errorRate || 0,
+      }],
+      edges: []
     }, { timeout: 15000 })
 
-    const { explanation, shapValues, affectedNodes } = response.data
+    console.log('🐍 [anomaly.controller] Python /explain Response:', JSON.stringify(response.data, null, 2))
+    const { explanation, shap_values, affected_nodes } = response.data
 
     // Cache back to DB
-    await Anomaly.findByIdAndUpdate(anomaly._id, { explanation, shapValues, affectedNodes })
+    await Anomaly.findByIdAndUpdate(anomaly._id, { explanation, shapValues: shap_values, affectedNodes: affected_nodes })
 
-    const updated = { ...anomaly, explanation, shapValues, affectedNodes }
+    const updated = { ...anomaly, explanation, shapValues: shap_values, affectedNodes: affected_nodes }
     return res.status(200).json(new ApiResponse(200, buildExplanationResponse(updated), 'Explanation generated'))
   } catch (err) {
     console.error('Python XAI service error:', err.message)

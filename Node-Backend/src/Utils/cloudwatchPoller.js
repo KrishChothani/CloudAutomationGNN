@@ -87,13 +87,14 @@ async function processResource({ resourceId, resourceType, metrics }) {
   // 2. Call Python GNN for anomaly score
   let score = 0
   try {
-    const response = await axios.post(`${PYTHON_URL}/predict`, {
-      eventId:      event._id.toString(),
-      resourceId,
-      resourceType,
-      metrics:      event.metrics,
+    const response = await axios.post(`${PYTHON_URL}/predict/single`, {
+      event_id:      event._id.toString(),
+      resource_id:   resourceId,
+      resource_type: resourceType,
+      metrics:       event.metrics,
     }, { timeout: 10000 })
-    score = response.data?.score ?? response.data?.anomalyScore ?? 0
+    console.log('🐍 [cloudwatchPoller] Python API Response:', JSON.stringify(response.data, null, 2))
+    score = response.data?.anomaly_score ?? response.data?.score ?? 0
   } catch (err) {
     console.warn(`[CW] Python GNN unavailable for ${resourceId}: ${err.message}`)
     // Fallback: estimate score from CPU (simple heuristic until GNN is available)

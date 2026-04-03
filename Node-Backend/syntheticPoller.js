@@ -72,14 +72,15 @@ async function simulateTick() {
     let score = 0
     let explanation = ''
     try {
-      const response = await axios.post(`${PYTHON_URL}/predict`, {
-        eventId: event._id.toString(),
-        resourceId: r.id,
-        resourceType: r.type,
+      const response = await axios.post(`${PYTHON_URL}/predict/single`, {
+        event_id: event._id.toString(),
+        resource_id: r.id,
+        resource_type: r.type,
         metrics: event.metrics
       }, { timeout: 3000 })
       
-      score = response.data?.score ?? response.data?.anomalyScore ?? 0
+      console.log('🐍 [syntheticPoller] Python API Response:', JSON.stringify(response.data, null, 2))
+      score = response.data?.anomaly_score ?? response.data?.score ?? 0
     } catch (err) {
       // Python down? Just use a manual rule based on the fake data we generated
       score = isAnomalous ? 0.92 : (Math.random() * 0.2)
