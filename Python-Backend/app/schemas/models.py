@@ -5,13 +5,13 @@ from typing import Optional, List, Dict
 class NodeFeatures(BaseModel):
     node_id: str
     node_type: str  # ec2, rds, lambda, s3, elb
-    cpu_usage: float = Field(ge=0, le=100)
-    memory_usage: float = Field(ge=0, le=100)
-    disk_usage: float = Field(ge=0, le=100)
-    network_in: float = Field(ge=0)     # MB/s
-    network_out: float = Field(ge=0)    # MB/s
-    error_rate: float = Field(ge=0, le=100)
-    latency: float = Field(ge=0)        # ms
+    cpu_usage: float = Field(default=0.0, ge=0, le=100)
+    memory_usage: float = Field(default=0.0, ge=0, le=100)
+    disk_usage: float = Field(default=0.0, ge=0, le=100)   # optional — not sent by Node.js
+    network_in: float = Field(default=0.0, ge=0)            # MB/s
+    network_out: float = Field(default=0.0, ge=0)           # MB/s
+    error_rate: float = Field(default=0.0, ge=0, le=100)
+    latency: float = Field(default=0.0, ge=0)               # ms
 
 
 class EdgeDefinition(BaseModel):
