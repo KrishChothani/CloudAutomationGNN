@@ -89,6 +89,7 @@ def plot_confusion_matrix(cm: np.ndarray, save_path: str):
         print("  ⚠️  matplotlib not available — skipping plot")
 
 
+
 def plot_roc_curve(y_true: np.ndarray, y_scores: np.ndarray, save_path: str):
     """Save ROC curve."""
     try:
