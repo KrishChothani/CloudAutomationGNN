@@ -232,7 +232,17 @@ custom:
     minify: false          # keep readable for Lambda logs/debugging
     sourcemap: true        # enables proper stack traces in CloudWatch
     target: node20         # matches provider.runtime
-    exclude: ['aws-sdk']
+    exclude: 
+      - 'aws-sdk'
+      - '@aws-sdk/client-dynamodb'
+      - '@aws-sdk/lib-dynamodb'
+      - '@aws-sdk/client-apigatewaymanagementapi'
+      - '@aws-sdk/client-cloudwatch'
+    external:
+      - '@aws-sdk/client-dynamodb'
+      - '@aws-sdk/lib-dynamodb'
+      - '@aws-sdk/client-apigatewaymanagementapi'
+      - '@aws-sdk/client-cloudwatch'
     define:
       'require.resolve': undefined
     platform: node
