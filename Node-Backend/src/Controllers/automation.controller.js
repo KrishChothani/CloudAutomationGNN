@@ -172,6 +172,7 @@ export const getAutomationStats = asyncHandler(async (req, res) => {
   )
 })
 
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function inferIcon(actionType) {
   if (!actionType) return 'alert'
