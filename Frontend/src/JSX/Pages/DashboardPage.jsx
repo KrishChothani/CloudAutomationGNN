@@ -100,7 +100,7 @@ export default function DashboardPage() {
     socketService.subscribe('GRAPH_UPDATE', onUpdate)
     
     // Belt-and-suspenders: hard 30s interval in case socket is slow
-    const interval = setInterval(fetchStats, 30_000)
+    const interval = setInterval(fetchStats, 5_000)
     
     return () => {
       socketService.unsubscribe('STATS_UPDATE', onUpdate)

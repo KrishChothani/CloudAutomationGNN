@@ -12,6 +12,13 @@ on:
           - cpu_spike
           - memory_leak
           - network_ddos
+          - latency_surge
+          - error_rate_spike
+          - disk_exhaustion
+          - lambda_timeout_flood
+          - rds_connection_exhaustion
+          - s3_exfiltration
+          - multi_node_failover
 
 jobs:
   simulate-attacks:
@@ -25,53 +32,270 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
-      - name: 1. Create & Trigger AWS CloudWatch Alarm
+      # ─────────────────────────────────────────────────────────────────────────
+      # STEP 1 — Resolve metrics and target node for the chosen attack type
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: 1. Resolve Attack Parameters
+        id: params
         run: |
-          ALARM_NAME="GNN-Demo-Attack-${{ github.event.inputs.attackType }}-${{ github.run_id }}"
-          
-          echo "🛠️ Creating CloudWatch Metric Alarm: $ALARM_NAME..."
+          ATTACK="${{ github.event.inputs.attackType }}"
+          echo "🎯 Selected attack: $ATTACK"
+
+          case "$ATTACK" in
+
+            cpu_spike)
+              RESOURCE="ec2-web-production"
+              RESOURCE_TYPE="ec2"
+              METRICS='{"cpuUsage": 99.5, "memoryUsage": 45.2, "latency": 12.1, "errorRate": 0.02, "networkIn": 120.0, "networkOut": 95.0}'
+              ALARM_METRIC="CPUUtilization"
+              ALARM_THRESHOLD=90
+              ALARM_NAMESPACE="AWS/EC2"
+              ;;
+
+            memory_leak)
+              RESOURCE="lambda-auth-service"
+              RESOURCE_TYPE="lambda"
+              METRICS='{"cpuUsage": 22.1, "memoryUsage": 98.9, "latency": 450.5, "errorRate": 0.04, "networkIn": 5.0, "networkOut": 3.2}'
+              ALARM_METRIC="MemoryUtilization"
+              ALARM_THRESHOLD=95
+              ALARM_NAMESPACE="CloudAutomationGNN/Custom"
+              ;;
+
+            network_ddos)
+              RESOURCE="api-gateway-edge"
+              RESOURCE_TYPE="elb"
+              METRICS='{"cpuUsage": 80.0, "memoryUsage": 78.0, "latency": 999.9, "errorRate": 0.35, "networkIn": 9500.0, "networkOut": 8200.0}'
+              ALARM_METRIC="NetworkPacketsIn"
+              ALARM_THRESHOLD=1000000
+              ALARM_NAMESPACE="AWS/EC2"
+              ;;
+
+            latency_surge)
+              RESOURCE="rds-primary-db"
+              RESOURCE_TYPE="rds"
+              METRICS='{"cpuUsage": 38.0, "memoryUsage": 55.0, "latency": 789.4, "errorRate": 0.08, "networkIn": 10.0, "networkOut": 8.0}'
+              ALARM_METRIC="ReadLatency"
+              ALARM_THRESHOLD=500
+              ALARM_NAMESPACE="AWS/RDS"
+              ;;
+
+            error_rate_spike)
+              RESOURCE="lambda-order-processor"
+              RESOURCE_TYPE="lambda"
+              METRICS='{"cpuUsage": 45.0, "memoryUsage": 60.0, "latency": 320.0, "errorRate": 0.72, "networkIn": 30.0, "networkOut": 22.0}'
+              ALARM_METRIC="Errors"
+              ALARM_THRESHOLD=100
+              ALARM_NAMESPACE="AWS/Lambda"
+              ;;
+
+            disk_exhaustion)
+              RESOURCE="ec2-data-processing"
+              RESOURCE_TYPE="ec2"
+              METRICS='{"cpuUsage": 15.0, "memoryUsage": 40.0, "latency": 980.0, "errorRate": 0.12, "diskUsage": 98.5, "networkIn": 2.0, "networkOut": 1.5}'
+              ALARM_METRIC="DiskWriteBytes"
+              ALARM_THRESHOLD=1099511627776
+              ALARM_NAMESPACE="AWS/EC2"
+              ;;
+
+            lambda_timeout_flood)
+              RESOURCE="lambda-image-resizer"
+              RESOURCE_TYPE="lambda"
+              METRICS='{"cpuUsage": 90.0, "memoryUsage": 88.0, "latency": 29900.0, "errorRate": 0.55, "networkIn": 200.0, "networkOut": 1.0}'
+              ALARM_METRIC="Duration"
+              ALARM_THRESHOLD=28000
+              ALARM_NAMESPACE="AWS/Lambda"
+              ;;
+
+            rds_connection_exhaustion)
+              RESOURCE="rds-replica-db"
+              RESOURCE_TYPE="rds"
+              METRICS='{"cpuUsage": 92.0, "memoryUsage": 97.0, "latency": 1500.0, "errorRate": 0.25, "networkIn": 0.5, "networkOut": 0.2}'
+              ALARM_METRIC="DatabaseConnections"
+              ALARM_THRESHOLD=400
+              ALARM_NAMESPACE="AWS/RDS"
+              ;;
+
+            s3_exfiltration)
+              RESOURCE="s3-user-data-bucket"
+              RESOURCE_TYPE="s3"
+              METRICS='{"cpuUsage": 5.0, "memoryUsage": 10.0, "latency": 55.0, "errorRate": 0.0, "networkOut": 7500.0, "networkIn": 0.1}'
+              ALARM_METRIC="BytesDownloaded"
+              ALARM_THRESHOLD=1073741824
+              ALARM_NAMESPACE="AWS/S3"
+              ;;
+
+            multi_node_failover)
+              # Handled in a dedicated step below — set a placeholder here
+              RESOURCE="cascade-failover-scenario"
+              RESOURCE_TYPE="ec2"
+              METRICS='{"cpuUsage": 99.9, "memoryUsage": 99.9, "latency": 9999.0, "errorRate": 0.99, "networkIn": 0.0, "networkOut": 0.0}'
+              ALARM_METRIC="CPUUtilization"
+              ALARM_THRESHOLD=90
+              ALARM_NAMESPACE="AWS/EC2"
+              ;;
+          esac
+
+          echo "RESOURCE=$RESOURCE"         >> $GITHUB_OUTPUT
+          echo "RESOURCE_TYPE=$RESOURCE_TYPE" >> $GITHUB_OUTPUT
+          echo "METRICS=$METRICS"           >> $GITHUB_OUTPUT
+          echo "ALARM_METRIC=$ALARM_METRIC" >> $GITHUB_OUTPUT
+          echo "ALARM_THRESHOLD=$ALARM_THRESHOLD" >> $GITHUB_OUTPUT
+          echo "ALARM_NAMESPACE=$ALARM_NAMESPACE" >> $GITHUB_OUTPUT
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # STEP 2 — Create & trigger CloudWatch alarm for single-node attacks
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: 2. Create & Trigger CloudWatch Alarm
+        if: github.event.inputs.attackType != 'multi_node_failover'
+        run: |
+          ALARM_NAME="GNN-Demo-${{ github.event.inputs.attackType }}-${{ github.run_id }}"
+
+          echo "🛠️  Creating CloudWatch Metric Alarm: $ALARM_NAME ..."
           aws cloudwatch put-metric-alarm \
             --alarm-name "$ALARM_NAME" \
-            --metric-name CPUUtilization \
-            --namespace AWS/EC2 \
+            --metric-name "${{ steps.params.outputs.ALARM_METRIC }}" \
+            --namespace "${{ steps.params.outputs.ALARM_NAMESPACE }}" \
             --statistic Average \
             --period 60 \
-            --threshold 90 \
+            --threshold ${{ steps.params.outputs.ALARM_THRESHOLD }} \
             --comparison-operator GreaterThanThreshold \
             --evaluation-periods 1
-            
-          echo "🚨 Forcing CloudWatch Alarm into ALARM state (Directly readable by Frontend!)..."
+
+          echo "🚨 Forcing alarm into ALARM state..."
           aws cloudwatch set-alarm-state \
             --alarm-name "$ALARM_NAME" \
             --state-value ALARM \
-            --state-reason "Simulated ${{ github.event.inputs.attackType }} exceeded 95% critical threshold!"
+            --state-reason "Simulated ${{ github.event.inputs.attackType }} — threshold exceeded on ${{ steps.params.outputs.RESOURCE }}"
 
-      - name: 2. Emit EventBridge Payload (Triggers Backend WebSockets)
+      # ─────────────────────────────────────────────────────────────────────────
+      # STEP 3 — Emit single EventBridge payload (for single-node attacks)
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: 3. Emit EventBridge Payload (Triggers GNN Pipeline)
+        if: github.event.inputs.attackType != 'multi_node_failover'
         run: |
-          # Customize metrics based on the selected attack type
-          if [ "${{ github.event.inputs.attackType }}" == "cpu_spike" ]; then
-            METRICS='{\"cpuUsage\": 99.5, \"memoryUsage\": 45.2, \"latency\": 12.1}'
-            RESOURCE="ec2-web-production"
-          elif [ "${{ github.event.inputs.attackType }}" == "memory_leak" ]; then
-            METRICS='{\"cpuUsage\": 22.1, \"memoryUsage\": 98.9, \"latency\": 450.5}'
-            RESOURCE="lambda-auth-service"
-          else
-            METRICS='{\"cpuUsage\": 80.0, \"memoryUsage\": 80.0, \"latency\": 999.9, \"requestCount\": 50000}'
-            RESOURCE="api-gateway-edge"
-          fi
-          
-          echo "🔥 Firing EventBridge Payload for $RESOURCE..."
-          
+          RESOURCE="${{ steps.params.outputs.RESOURCE }}"
+          RESOURCE_TYPE="${{ steps.params.outputs.RESOURCE_TYPE }}"
+          METRICS='${{ steps.params.outputs.METRICS }}'
+
+          echo "🔥 Firing EventBridge event for $RESOURCE ($RESOURCE_TYPE) ..."
+
           PAYLOAD=$(cat <<EOF
           [
             {
               "Source": "cloud-automation.metrics",
               "DetailType": "CloudMetricEvent",
-              "Detail": "{\"resource_id\": \"$RESOURCE\", \"resource_type\": \"AWS Component\", \"metrics\": $METRICS}"
+              "Detail": "{\"resource_id\": \"$RESOURCE\", \"resource_type\": \"$RESOURCE_TYPE\", \"metrics\": $METRICS}"
             }
           ]
           EOF
           )
-          
+
           aws events put-events --entries "$PAYLOAD"
-          echo "✅ EventBridge Payload fired! Backend pipeline triggered perfectly."
+          echo "✅ EventBridge fired! GNN backend pipeline triggered."
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # STEP 4 — Multi-Node Cascade Failover (fires all nodes simultaneously)
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: 4. Multi-Node Cascade Failover — Create Alarms for All Nodes
+        if: github.event.inputs.attackType == 'multi_node_failover'
+        run: |
+          echo "💥 Simulating MULTI-NODE CASCADE FAILOVER across all resource types..."
+          RUN_ID="${{ github.run_id }}"
+
+          NODES=(
+            "ec2-web-production|ec2|CPUUtilization|AWS/EC2|90"
+            "ec2-data-processing|ec2|CPUUtilization|AWS/EC2|90"
+            "lambda-auth-service|lambda|Duration|AWS/Lambda|28000"
+            "lambda-order-processor|lambda|Errors|AWS/Lambda|100"
+            "lambda-image-resizer|lambda|Duration|AWS/Lambda|28000"
+            "rds-primary-db|rds|DatabaseConnections|AWS/RDS|400"
+            "rds-replica-db|rds|ReadLatency|AWS/RDS|500"
+            "s3-user-data-bucket|s3|BytesDownloaded|AWS/S3|1073741824"
+            "api-gateway-edge|elb|NetworkPacketsIn|AWS/EC2|1000000"
+          )
+
+          for ENTRY in "${NODES[@]}"; do
+            IFS='|' read -r RESOURCE RESOURCE_TYPE ALARM_METRIC NAMESPACE THRESHOLD <<< "$ENTRY"
+            ALARM_NAME="GNN-Failover-$RESOURCE-$RUN_ID"
+
+            echo "🛠️  Creating alarm for $RESOURCE ..."
+            aws cloudwatch put-metric-alarm \
+              --alarm-name "$ALARM_NAME" \
+              --metric-name "$ALARM_METRIC" \
+              --namespace "$NAMESPACE" \
+              --statistic Average \
+              --period 60 \
+              --threshold "$THRESHOLD" \
+              --comparison-operator GreaterThanThreshold \
+              --evaluation-periods 1
+
+            echo "🚨  Tripping alarm for $RESOURCE into ALARM state..."
+            aws cloudwatch set-alarm-state \
+              --alarm-name "$ALARM_NAME" \
+              --state-value ALARM \
+              --state-reason "CASCADE FAILOVER: $RESOURCE exceeded threshold — GNN anomaly detection triggered"
+          done
+
+          echo "✅ All CloudWatch alarms created and tripped."
+
+      - name: 5. Multi-Node Cascade Failover — Emit Batch EventBridge Events
+        if: github.event.inputs.attackType == 'multi_node_failover'
+        run: |
+          echo "📡 Firing batch EventBridge events for all failing nodes..."
+
+          PAYLOADS=$(cat <<'EOF'
+          [
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"ec2-web-production\",     \"resource_type\": \"ec2\",    \"metrics\": {\"cpuUsage\": 99.5, \"memoryUsage\": 85.0, \"latency\": 4500.0, \"errorRate\": 0.45, \"networkIn\": 0.0, \"networkOut\": 0.0}}"
+            },
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"ec2-data-processing\",    \"resource_type\": \"ec2\",    \"metrics\": {\"cpuUsage\": 96.2, \"memoryUsage\": 91.0, \"latency\": 6200.0, \"errorRate\": 0.60, \"networkIn\": 0.0, \"networkOut\": 0.0}}"
+            },
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"lambda-auth-service\",     \"resource_type\": \"lambda\", \"metrics\": {\"cpuUsage\": 88.0, \"memoryUsage\": 99.0, \"latency\": 28500.0, \"errorRate\": 0.80, \"networkIn\": 0.5, \"networkOut\": 0.2}}"
+            },
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"lambda-order-processor\",  \"resource_type\": \"lambda\", \"metrics\": {\"cpuUsage\": 75.0, \"memoryUsage\": 79.0, \"latency\": 15000.0, \"errorRate\": 0.72, \"networkIn\": 1.0, \"networkOut\": 0.5}}"
+            },
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"rds-primary-db\",          \"resource_type\": \"rds\",    \"metrics\": {\"cpuUsage\": 93.0, \"memoryUsage\": 97.5, \"latency\": 3200.0, \"errorRate\": 0.30, \"networkIn\": 0.2, \"networkOut\": 0.1}}"
+            },
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"rds-replica-db\",          \"resource_type\": \"rds\",    \"metrics\": {\"cpuUsage\": 91.0, \"memoryUsage\": 96.0, \"latency\": 4100.0, \"errorRate\": 0.28, \"networkIn\": 0.1, \"networkOut\": 0.05}}"
+            },
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"lambda-image-resizer\",    \"resource_type\": \"lambda\", \"metrics\": {\"cpuUsage\": 92.0, \"memoryUsage\": 88.0, \"latency\": 29900.0, \"errorRate\": 0.55, \"networkIn\": 0.3, \"networkOut\": 0.1}}"
+            },
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"s3-user-data-bucket\",     \"resource_type\": \"s3\",     \"metrics\": {\"cpuUsage\": 5.0, \"memoryUsage\": 10.0, \"latency\": 55.0, \"errorRate\": 0.0, \"networkOut\": 7500.0, \"networkIn\": 0.1}}"
+            },
+            {
+              "Source": "cloud-automation.metrics",
+              "DetailType": "CloudMetricEvent",
+              "Detail": "{\"resource_id\": \"api-gateway-edge\",        \"resource_type\": \"elb\",    \"metrics\": {\"cpuUsage\": 80.0, \"memoryUsage\": 78.0, \"latency\": 999.9, \"errorRate\": 0.35, \"networkIn\": 9500.0, \"networkOut\": 8200.0}}"
+            }
+          ]
+          EOF
+          )
+
+          # EventBridge put-events accepts max 10 entries per request — our 9 nodes fit in one call
+          aws events put-events --entries "$PAYLOADS"
+
+          echo "✅ Cascade failover batch event fired! GNN will classify all 9 nodes."
+          echo "🧠 GraphSAGE will propagate anomaly signals across neighbors automatically."

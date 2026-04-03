@@ -168,13 +168,20 @@ export const getExplanation = asyncHandler(async (req, res) => {
 
       const { explanation, shap_values, affected_nodes } = pyResponse.data
 
-      const shapArray = shap_values
-        ? Object.entries(shap_values).map(([key, val]) => ({
-            feature:    key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()),
-            importance: Math.abs(val),
-            direction:  val >= 0 ? 'positive' : 'negative',
+      // Python returns shap_values as [{feature, value}] array; DB cache stores it as a plain object
+      const shapArray = Array.isArray(shap_values)
+        ? shap_values.map(({ feature, value }) => ({
+            feature:    feature.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            importance: Math.abs(value),
+            direction:  value >= 0 ? 'positive' : 'negative',
           })).sort((a, b) => b.importance - a.importance)
-        : [{ feature: 'Metric Threshold Exceeded', importance: 0.99, direction: 'positive' }]
+        : shap_values && typeof shap_values === 'object'
+          ? Object.entries(shap_values).map(([key, val]) => ({
+              feature:    key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()),
+              importance: Math.abs(val),
+              direction:  val >= 0 ? 'positive' : 'negative',
+            })).sort((a, b) => b.importance - a.importance)
+          : [{ feature: 'Metric Threshold Exceeded', importance: 0.99, direction: 'positive' }]
 
       return res.status(200).json(new ApiResponse(200, {
         anomalyId:    alarmId,

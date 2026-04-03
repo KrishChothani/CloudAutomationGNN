@@ -309,7 +309,7 @@ export default function XAIPanel({ alert, isOpen, onClose }) {
                   lineHeight: '1.75',
                 }}
               >
-                {nlExplanation}
+                <span dangerouslySetInnerHTML={{ __html: nlExplanation }} />
               </div>
             </section>
           )}
