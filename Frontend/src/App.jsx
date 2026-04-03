@@ -26,6 +26,7 @@ import DashboardPage from './JSX/Pages/DashboardPage.jsx'
 import AlertsPage from './JSX/Pages/AlertsPage.jsx'
 import ProtectedRoute from './JSX/Components/Protection/ProtectedRoute.jsx'
 
+
 function App() {
   return (
     <Routes>

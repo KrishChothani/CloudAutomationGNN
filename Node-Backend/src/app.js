@@ -22,6 +22,7 @@ const allowedOrigins = [
   'http://localhost:3000',
 ]
 
+
 app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (curl, Postman, Lambda-to-Lambda)

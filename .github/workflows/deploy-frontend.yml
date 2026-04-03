@@ -50,7 +50,7 @@ jobs:
         env:
           VITE_API_BASE_URL: https://76hzb1es12.execute-api.ap-south-1.amazonaws.com/dev/api/v1
           VITE_PYTHON_API_URL: http://${{ steps.get-ip.outputs.ec2_ip }}:8000
-          VITE_WS_URL: ""
+          VITE_WS_URL: "wss://qq97qysfyd.execute-api.ap-south-1.amazonaws.com/dev"
 
 
 
