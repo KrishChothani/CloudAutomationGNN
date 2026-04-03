@@ -75,7 +75,7 @@ provider:
             - !Sub 'arn:aws:events:${self:provider.region}:*:event-bus/default'
             - !Sub 'arn:aws:events:${self:provider.region}:*:rule/cloud-metrics-rule'
 
-        # ── SQS: consume event queue ──────────────────────────────────────
+        # ── SQS: consume event queue ──────────────────────────────────────────────────
         - Effect: Allow
           Action:
             - sqs:ReceiveMessage
@@ -84,7 +84,7 @@ provider:
             - sqs:ChangeMessageVisibility
             - sqs:GetQueueUrl
           Resource:
-            - arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-${self:provider.stage}-event-queue
+            - !Sub 'arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-${self:provider.stage}-event-queue'
 
         # ── CloudWatch API: Fetch direct alarms (Needed by anomaly controller)
         - Effect: Allow
@@ -166,7 +166,7 @@ functions:
               - DELETE
               - OPTIONS
 
-  # ── 2. EventBridge event processor (GNN metric ingestion) ─────────────────
+  # ── 2. EventBridge event processor (GNN metric ingestion) ────────────────────────────
   eventProcessor:
     name: cloud-automation-gnn-event-processor-${self:provider.stage}
     handler: src/eventProcessor.handler
@@ -186,7 +186,9 @@ functions:
               - 'CloudMetricEvent'
               - 'CloudWatch Alarm State Change'
       - sqs:
-          arn: arn:aws:sqs:${self:provider.region}:${aws:accountId}:cloud-automation-gnn-${self:provider.stage}-event-queue
+          # Reference existing queue by stable ARN — do NOT declare it as a CF resource
+          # to avoid CREATE_FAILED "Queue already exists" errors on redeploy
+          arn: !Sub 'arn:aws:sqs:${self:provider.region}:${AWS::AccountId}:cloud-automation-gnn-${self:provider.stage}-event-queue'
           batchSize: 10
           maximumBatchingWindow: 30
           functionResponseType: ReportBatchItemFailures
@@ -268,6 +270,8 @@ resources:
     # ── DynamoDB Table for WebSocket Connections ──────────────────────────────
     WsConnectionsTable:
       Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
       Properties:
         TableName: cloud-automation-ws-connections-${self:provider.stage}
         BillingMode: PAY_PER_REQUEST
@@ -284,11 +288,15 @@ resources:
     # --- LEGACY RESOURCES START ---
     CloudAutomationSnsTopic:
       Type: AWS::SNS::Topic
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
       Properties:
         TopicName: cloud-automation-events-${self:provider.stage}
 
     GnnDataTable:
       Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
       Properties:
         TableName: cloud-automation-gnn-${self:provider.stage}
         BillingMode: PAY_PER_REQUEST
@@ -303,9 +311,9 @@ resources:
           - AttributeName: sortKey
             KeyType: RANGE
 
-    EventQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: cloud-automation-gnn-${self:provider.stage}-event-queue
-        VisibilityTimeout: 90
-        MessageRetentionPeriod: 86400
+    # NOTE: The SQS EventQueue is NOT defined here as a CloudFormation resource.
+    # It is referenced by stable ARN in the eventProcessor function trigger above.
+    # Reason: Defining it causes CREATE_FAILED "Queue already exists" on redeploy
+    # since the queue was previously created outside this stack.
+    # If you need to create it fresh, run this AWS CLI command first:
+    #   aws sqs create-queue --queue-name cloud-automation-gnn-dev-event-queue --region ap-south-1

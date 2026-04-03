@@ -77,7 +77,7 @@ export default function DashboardPage() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [alertsLoading, setAlertsLoading] = useState(true)
 
-  // ── Fetch dashboard stats ─────────────────────────────────────────────────
+  // ── Fetch dashboard stats ─────────────────────────────────────────────────────
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -93,17 +93,24 @@ export default function DashboardPage() {
 
     fetchStats()
     
+    // Socket-based real-time updates (fires immediately when WS event arrives or poll tick)
     const onUpdate = () => fetchStats()
     socketService.subscribe('STATS_UPDATE', onUpdate)
     socketService.subscribe('ANOMALY_UPDATE', onUpdate)
+    socketService.subscribe('GRAPH_UPDATE', onUpdate)
+    
+    // Belt-and-suspenders: hard 30s interval in case socket is slow
+    const interval = setInterval(fetchStats, 30_000)
     
     return () => {
       socketService.unsubscribe('STATS_UPDATE', onUpdate)
       socketService.unsubscribe('ANOMALY_UPDATE', onUpdate)
+      socketService.unsubscribe('GRAPH_UPDATE', onUpdate)
+      clearInterval(interval)
     }
   }, [])
 
-  // ── Fetch top 5 alerts ────────────────────────────────────────────────────
+  // ── Fetch top 5 alerts ──────────────────────────────────────────────────────
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
@@ -124,7 +131,13 @@ export default function DashboardPage() {
     const onUpdate = () => fetchAlerts()
     socketService.subscribe('ANOMALY_UPDATE', onUpdate)
     
-    return () => socketService.unsubscribe('ANOMALY_UPDATE', onUpdate)
+    // Belt-and-suspenders: hard 30s interval fallback
+    const interval = setInterval(fetchAlerts, 6_000)
+    
+    return () => {
+      socketService.unsubscribe('ANOMALY_UPDATE', onUpdate)
+      clearInterval(interval)
+    }
   }, [])
 
   const handleNodeClick = (nodeData) => {

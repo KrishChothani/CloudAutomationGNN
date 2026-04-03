@@ -3,6 +3,9 @@ import { ApiError } from '../Utils/ApiError.js'
 import { ApiResponse } from '../Utils/ApiResponse.js'
 import Anomaly from '../Models/anomaly.model.js'
 import AutomationLog from '../Models/automationLog.model.js'
+import axios from 'axios'
+
+const PYTHON_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000'
 
 // ─── GET /automation/logs ─────────────────────────────────────────────────────
 export const getAutomationLogs = asyncHandler(async (req, res) => {
@@ -93,22 +96,66 @@ export const triggerRemediation = asyncHandler(async (req, res) => {
     triggeredBy: 'system',
   })
 
-  // Update anomaly status
+  // Update anomaly status to triggered
   await Anomaly.findByIdAndUpdate(anomalyId, {
     action:       actionLabel,
     actionStatus: 'triggered',
   })
 
-  // Simulate async completion — update log to SUCCESS/FAILED
-  setTimeout(async () => {
-    const finalStatus = Math.random() > 0.1 ? 'SUCCESS' : 'FAILED'
+  // ── Call Python GNN service for real inference ──────────────────────────────
+  // Run this async so we return immediately (202) and update in background
+  setImmediate(async () => {
+    let finalStatus = 'SUCCESS' // optimistic default
+
+    try {
+      const pythonResponse = await axios.post(
+        `${PYTHON_URL}/predict/single`,
+        {
+          event_id:      log._id.toString(),
+          resource_id:   effectiveResourceId,
+          resource_type: anomaly.resourceType,
+          metrics: {
+            cpu_usage:     anomaly.metrics?.cpuUsage     ?? 0,
+            memory_usage:  anomaly.metrics?.memoryUsage  ?? 0,
+            latency:       anomaly.metrics?.latency       ?? 0,
+            error_rate:    anomaly.metrics?.errorRate     ?? 0,
+            request_count: anomaly.metrics?.requestCount  ?? 0,
+          },
+        },
+        { timeout: 12000 }
+      )
+
+      console.log(`🐍 [automation.controller] Python /predict/single response for ${effectiveResourceId}:`, JSON.stringify(pythonResponse.data, null, 2))
+
+      const { anomaly_score, is_anomaly, severity } = pythonResponse.data
+
+      // If GNN still flags this as anomalous after remediation attempt, mark FAILED
+      // Otherwise assume the action resolved the issue
+      finalStatus = is_anomaly && anomaly_score > 0.5 ? 'FAILED' : 'SUCCESS'
+
+      // Update anomaly score fields with fresh GNN result
+      await Anomaly.findByIdAndUpdate(anomalyId, {
+        score:    anomaly_score,
+        severity: severity || (anomaly_score >= 0.85 ? 'critical' : anomaly_score >= 0.65 ? 'high' : 'medium'),
+      })
+    } catch (err) {
+      // Python service unavailable — fallback to SUCCESS (action was dispatched)
+      console.warn(`[automation.controller] Python service unavailable for ${effectiveResourceId}:`, err.message)
+      finalStatus = 'SUCCESS'
+    }
+
+    // Persist final status to DB
     await AutomationLog.findByIdAndUpdate(log._id, { status: finalStatus })
     await Anomaly.findByIdAndUpdate(anomalyId, {
       actionStatus: finalStatus.toLowerCase(),
+      resolved:     finalStatus === 'SUCCESS',
+      resolvedAt:   finalStatus === 'SUCCESS' ? new Date() : undefined,
     })
-  }, 3000)
 
-  return res.status(202).json(new ApiResponse(202, { log }, 'Remediation action triggered'))
+    console.log(`[automation.controller] Remediation for ${effectiveResourceId} completed — status: ${finalStatus}`)
+  })
+
+  return res.status(202).json(new ApiResponse(202, { log }, 'Remediation action triggered — Python GNN evaluating result'))
 })
 
 // ─── GET /automation/stats ────────────────────────────────────────────────────

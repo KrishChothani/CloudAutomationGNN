@@ -80,14 +80,22 @@ export default function AutomationLog() {
     }
   }, [])
 
-  // ── Initial load + WebSocket updates ─────────────────────────────────────────
+  // ── Initial load + WebSocket updates + polling fallback ──────────────────────
   useEffect(() => {
     fetchLogs(false)
     
     const onUpdate = () => fetchLogs(true)
     socketService.subscribe('AUTOMATION_LOG', onUpdate)
+    socketService.subscribe('ANOMALY_UPDATE', onUpdate)  // also refresh on new anomalies
     
-    return () => socketService.unsubscribe('AUTOMATION_LOG', onUpdate)
+    // Belt-and-suspenders: hard 20s interval fallback in case WS/polling misses events
+    const interval = setInterval(() => fetchLogs(true), 20_000)
+    
+    return () => {
+      socketService.unsubscribe('AUTOMATION_LOG', onUpdate)
+      socketService.unsubscribe('ANOMALY_UPDATE', onUpdate)
+      clearInterval(interval)
+    }
   }, [fetchLogs])
 
   const successCount = logs.filter(l => l.status === 'SUCCESS').length
