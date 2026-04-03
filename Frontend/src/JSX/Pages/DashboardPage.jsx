@@ -132,7 +132,7 @@ export default function DashboardPage() {
     socketService.subscribe('ANOMALY_UPDATE', onUpdate)
     
     // Belt-and-suspenders: hard 30s interval fallback
-    const interval = setInterval(fetchAlerts, 6_000)
+    const interval = setInterval(fetchAlerts, 30_000)
     
     return () => {
       socketService.unsubscribe('ANOMALY_UPDATE', onUpdate)
