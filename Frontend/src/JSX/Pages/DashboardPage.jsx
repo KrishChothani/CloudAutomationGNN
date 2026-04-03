@@ -20,6 +20,7 @@ import XAIPanel        from '../Components/XAIPanel.jsx'
 import NodeDetailModal from '../Components/NodeDetailModal.jsx'
 import AuthContext     from '../Contexts/AuthContext.js'
 import apiClient       from '../../services/apiClient.js'
+import { socketService } from '../../services/socket.js'
 import { Link }        from 'react-router-dom'
 
 // ─── Stat Card ─────────────────────────────────────────────────────────────────
@@ -91,8 +92,15 @@ export default function DashboardPage() {
     }
 
     fetchStats()
-    const interval = setInterval(fetchStats, 30000)
-    return () => clearInterval(interval)
+    
+    const onUpdate = () => fetchStats()
+    socketService.subscribe('STATS_UPDATE', onUpdate)
+    socketService.subscribe('ANOMALY_UPDATE', onUpdate)
+    
+    return () => {
+      socketService.unsubscribe('STATS_UPDATE', onUpdate)
+      socketService.unsubscribe('ANOMALY_UPDATE', onUpdate)
+    }
   }, [])
 
   // ── Fetch top 5 alerts ────────────────────────────────────────────────────
@@ -112,8 +120,11 @@ export default function DashboardPage() {
     }
 
     fetchAlerts()
-    const interval = setInterval(fetchAlerts, 30000)
-    return () => clearInterval(interval)
+    
+    const onUpdate = () => fetchAlerts()
+    socketService.subscribe('ANOMALY_UPDATE', onUpdate)
+    
+    return () => socketService.unsubscribe('ANOMALY_UPDATE', onUpdate)
   }, [])
 
   const handleNodeClick = (nodeData) => {
@@ -173,7 +184,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
                style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#34d399' }}>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Live · Polling every 30s
+            Live WebSockets active
           </div>
         </div>
 

@@ -14,6 +14,7 @@ import {
 } from 'react-icons/md'
 import { FiZoomIn } from 'react-icons/fi'
 import { getAutomationLogs } from '../../services/automationApi.js'
+import { socketService } from '../../services/socket.js'
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 const STATUS_STYLE = {
@@ -79,11 +80,14 @@ export default function AutomationLog() {
     }
   }, [])
 
-  // ── Initial load + poll every 20s ─────────────────────────────────────────
+  // ── Initial load + WebSocket updates ─────────────────────────────────────────
   useEffect(() => {
     fetchLogs(false)
-    const interval = setInterval(() => fetchLogs(true), 20000)
-    return () => clearInterval(interval)
+    
+    const onUpdate = () => fetchLogs(true)
+    socketService.subscribe('AUTOMATION_LOG', onUpdate)
+    
+    return () => socketService.unsubscribe('AUTOMATION_LOG', onUpdate)
   }, [fetchLogs])
 
   const successCount = logs.filter(l => l.status === 'SUCCESS').length
@@ -100,7 +104,7 @@ export default function AutomationLog() {
             Automation Log
           </h3>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {loading ? 'Loading…' : `${logs.length} actions · polls every 20s`}
+            {loading ? 'Loading…' : `${logs.length} actions · Live updates`}
           </p>
         </div>
         <div className="flex items-center gap-2">

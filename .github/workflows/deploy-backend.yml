@@ -47,8 +47,6 @@ jobs:
           REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
           CORS_ORIGIN: "http://cloud-automation-gnn-frontend-dev.s3-website.ap-south-1.amazonaws.com"
           PYTHON_SERVICE_URL: ${{ secrets.PYTHON_SERVICE_URL }}
-          SNS_TOPIC_ARN: ${{ secrets.SNS_TOPIC_ARN }}
           ACCESS_TOKEN_EXPIRY: ${{ secrets.ACCESS_TOKEN_EXPIRY }}
           REFRESH_TOKEN_EXPIRY: ${{ secrets.REFRESH_TOKEN_EXPIRY }}
-          DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE }}
         run: npx serverless deploy --stage dev --verbose

@@ -12,6 +12,7 @@ import Sigma from 'sigma'
 import forceAtlas2 from 'graphology-layout-forceatlas2'
 import { MdRefresh } from 'react-icons/md'
 import { getGraph } from '../../services/graphApi.js'
+import { socketService } from '../../services/socket.js'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function scoreToColor(score) {
@@ -78,8 +79,11 @@ export default function ResourceGraph({ onNodeClick }) {
 
   useEffect(() => {
     fetchGraph()
-    const interval = setInterval(fetchGraph, 15000)
-    return () => clearInterval(interval)
+    
+    const onUpdate = () => fetchGraph()
+    socketService.subscribe('GRAPH_UPDATE', onUpdate)
+    
+    return () => socketService.unsubscribe('GRAPH_UPDATE', onUpdate)
   }, [fetchGraph])
 
   // ── Build Sigma graph from API data ────────────────────────────────────────
@@ -294,7 +298,7 @@ export default function ResourceGraph({ onNodeClick }) {
 
         <div className="flex flex-col gap-1 ml-auto">
           <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Updates</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Polls every 15s</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Live WS Stream</p>
         </div>
       </div>
     </div>

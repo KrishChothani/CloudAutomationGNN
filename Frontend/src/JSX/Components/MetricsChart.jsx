@@ -13,6 +13,7 @@ import {
 } from 'recharts'
 import { MdArrowDropDown, MdRefresh } from 'react-icons/md'
 import apiClient from '../../services/apiClient.js'
+import { socketService } from '../../services/socket.js'
 
 // ─── Custom Tooltip ─────────────────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label, unit, threshold }) => {
@@ -135,18 +136,21 @@ export default function MetricsChart({ initialResource }) {
     fetchResources()
   }, []) // eslint-disable-line
 
-  // ── Auto-refresh every 5s ─────────────────────────────────────────────────
+  // ── Auto-refresh via WebSocket ────────────────────────────────────────────
   useEffect(() => {
     setLoading(true)
     fetchMetrics(selectedResource)
 
-    if (!autoRefresh) {
-      clearInterval(intervalRef.current)
-      return
-    }
+    if (!autoRefresh) return
 
-    intervalRef.current = setInterval(() => fetchMetrics(selectedResource), 5000)
-    return () => clearInterval(intervalRef.current)
+    const onUpdate = (payload) => {
+       // Optional: the backend might push the exact metric for this resource
+       // if (payload && payload.resourceId === selectedResource) fetchMetrics(selectedResource)
+       fetchMetrics(selectedResource)
+    }
+    
+    socketService.subscribe('METRICS_UPDATE', onUpdate)
+    return () => socketService.unsubscribe('METRICS_UPDATE', onUpdate)
   }, [autoRefresh, selectedResource, fetchMetrics])
 
   // ── Update resource when prop changes (user clicks a graph node) ──────────
@@ -177,7 +181,7 @@ export default function MetricsChart({ initialResource }) {
         <div>
           <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Resource Metrics</h3>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {loading ? 'Loading…' : error ? '⚠️ Error loading metrics' : `Live · 5s refresh · ${data.length} data points`}
+            {loading ? 'Loading…' : error ? '⚠️ Error loading metrics' : `Live WS Stream · ${data.length} data points`}
           </p>
         </div>
 

@@ -13,6 +13,7 @@ import Sidebar   from '../Components/Sidebar.jsx'
 import AlertCard from '../Components/AlertCard.jsx'
 import XAIPanel  from '../Components/XAIPanel.jsx'
 import apiClient from '../../services/apiClient.js'
+import { socketService } from '../../services/socket.js'
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 10
@@ -162,8 +163,11 @@ export default function AlertsPage() {
 
   useEffect(() => {
     fetchAlerts()
-    const interval = setInterval(fetchAlerts, 30000)
-    return () => clearInterval(interval)
+    
+    const onUpdate = () => fetchAlerts()
+    socketService.subscribe('ANOMALY_UPDATE', onUpdate)
+    
+    return () => socketService.unsubscribe('ANOMALY_UPDATE', onUpdate)
   }, [fetchAlerts])
 
   // Reset page when tab changes
