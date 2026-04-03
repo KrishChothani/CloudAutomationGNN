@@ -83,7 +83,13 @@ export default function ResourceGraph({ onNodeClick }) {
     const onUpdate = () => fetchGraph()
     socketService.subscribe('GRAPH_UPDATE', onUpdate)
     
-    return () => socketService.unsubscribe('GRAPH_UPDATE', onUpdate)
+    // Independent polling — don't rely solely on the socket/global poll ticker
+    const interval = setInterval(fetchGraph, 2_000)
+    
+    return () => {
+      socketService.unsubscribe('GRAPH_UPDATE', onUpdate)
+      clearInterval(interval)
+    }
   }, [fetchGraph])
 
   // ── Build Sigma graph from API data ────────────────────────────────────────

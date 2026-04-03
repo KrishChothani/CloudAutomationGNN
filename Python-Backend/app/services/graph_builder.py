@@ -75,9 +75,13 @@ def build_graph(nodes: List[Dict[str, Any]], edges: List[List[str]]) -> Data:
 
     raw_features = np.array(feature_rows, dtype=np.float32)   # [N, 5]
 
-    # ── 2. StandardScaler normalisation ──────────────────────────────────────
-    scaler = StandardScaler()
-    normalised = scaler.fit_transform(raw_features)            # [N, 5] z-scores
+    # ── 2. Fixed Normalisation ───────────────────────────────────────────────
+    # Using fixed training-set baseline statistics so a single node (N=1)
+    # doesn't get zeroed out by trying to compute variance on a single sample.
+    GLOBAL_MEANS = np.array([30.0, 45.0, 150.0, 0.02, 400.0], dtype=np.float32)
+    GLOBAL_STDS  = np.array([25.0, 20.0, 120.0, 0.04, 250.0], dtype=np.float32)
+    
+    normalised = (raw_features - GLOBAL_MEANS) / GLOBAL_STDS
 
     x = torch.tensor(normalised, dtype=torch.float)
 
@@ -114,7 +118,8 @@ def build_graph(nodes: List[Dict[str, Any]], edges: List[List[str]]) -> Data:
     # Attach metadata (not used by GNN, useful for debugging / XAI node mapping)
     data.node_ids    = [node["id"] for node in nodes]
     data.num_nodes   = len(nodes)
-    data.scaler      = scaler          # keep for inverse_transform if needed
+    data.global_means = GLOBAL_MEANS
+    data.global_stds  = GLOBAL_STDS
 
     return data
 

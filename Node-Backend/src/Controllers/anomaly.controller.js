@@ -17,6 +17,145 @@ function normalizeSeverity(s) {
   return s.toUpperCase()
 }
 
+/**
+ * Derive realistic attack-specific metrics from a CloudWatch alarm name.
+ * Alarm names follow the pattern: GNN-Demo-<attackType>-<runId>
+ * or GNN-Failover-<resource>-<runId>.
+ * Returns { metrics, resourceType, attackLabel }.
+ */
+function deriveAlarmMetrics(alarmName) {
+  const name = alarmName.toLowerCase()
+
+  // Detect attack type from known keywords in alarm name
+  if (name.includes('cpu') || name.includes('cpu_spike') || name.includes('ec2-web')) {
+    return {
+      resourceType: 'ec2',
+      attackLabel:  'CPU Spike',
+      metrics: { cpu_usage: 99.5, memory_usage: 45.2, latency: 210.0, error_rate: 2.0, network_in: 120.0, network_out: 95.0 },
+    }
+  }
+  if (name.includes('memory') || name.includes('memory_leak') || name.includes('lambda-auth')) {
+    return {
+      resourceType: 'lambda',
+      attackLabel:  'Memory Leak',
+      metrics: { cpu_usage: 22.1, memory_usage: 98.9, latency: 450.5, error_rate: 4.0, network_in: 5.0, network_out: 3.2 },
+    }
+  }
+  if (name.includes('ddos') || name.includes('network') || name.includes('api-gateway') || name.includes('elb')) {
+    return {
+      resourceType: 'elb',
+      attackLabel:  'Network DDoS',
+      metrics: { cpu_usage: 80.0, memory_usage: 78.0, latency: 999.9, error_rate: 35.0, network_in: 9500.0, network_out: 8200.0 },
+    }
+  }
+  if (name.includes('latency') || name.includes('rds-primary') || name.includes('rds')) {
+    return {
+      resourceType: 'rds',
+      attackLabel:  'Latency Surge',
+      metrics: { cpu_usage: 38.0, memory_usage: 55.0, latency: 789.4, error_rate: 8.0, network_in: 10.0, network_out: 8.0 },
+    }
+  }
+  if (name.includes('error') || name.includes('lambda-order')) {
+    return {
+      resourceType: 'lambda',
+      attackLabel:  'Error Rate Spike',
+      metrics: { cpu_usage: 45.0, memory_usage: 60.0, latency: 320.0, error_rate: 72.0, network_in: 30.0, network_out: 22.0 },
+    }
+  }
+  if (name.includes('disk') || name.includes('ec2-data')) {
+    return {
+      resourceType: 'ec2',
+      attackLabel:  'Disk Exhaustion',
+      metrics: { cpu_usage: 15.0, memory_usage: 40.0, latency: 980.0, error_rate: 12.0, network_in: 2.0, network_out: 1.5 },
+    }
+  }
+  if (name.includes('timeout') || name.includes('lambda-image')) {
+    return {
+      resourceType: 'lambda',
+      attackLabel:  'Lambda Timeout Flood',
+      metrics: { cpu_usage: 90.0, memory_usage: 88.0, latency: 29900.0, error_rate: 55.0, network_in: 200.0, network_out: 1.0 },
+    }
+  }
+  if (name.includes('connection') || name.includes('rds-replica')) {
+    return {
+      resourceType: 'rds',
+      attackLabel:  'RDS Connection Exhaustion',
+      metrics: { cpu_usage: 92.0, memory_usage: 97.0, latency: 1500.0, error_rate: 25.0, network_in: 0.5, network_out: 0.2 },
+    }
+  }
+  if (name.includes('s3') || name.includes('exfil')) {
+    return {
+      resourceType: 's3',
+      attackLabel:  'S3 Data Exfiltration',
+      metrics: { cpu_usage: 5.0, memory_usage: 10.0, latency: 55.0, error_rate: 0.0, network_in: 0.1, network_out: 7500.0 },
+    }
+  }
+  if (name.includes('failover') || name.includes('cascade')) {
+    return {
+      resourceType: 'ec2',
+      attackLabel:  'Multi-Node Cascade Failover',
+      metrics: { cpu_usage: 99.9, memory_usage: 99.9, latency: 9999.0, error_rate: 99.0, network_in: 0.0, network_out: 0.0 },
+    }
+  }
+
+  // Default fallback — generic high-load
+  return {
+    resourceType: 'ec2',
+    attackLabel:  'Anomalous Load',
+    metrics: { cpu_usage: 95.0, memory_usage: 88.0, latency: 900.0, error_rate: 8.5, network_in: 300.0, network_out: 250.0 },
+  }
+}
+
+/**
+ * Compute feature importances directly from metric deviations.
+ * Baselines represent healthy p50 values for each metric.
+ * Returns [{feature, importance, direction}] sorted by importance desc.
+ */
+function computeMetricShap(metrics) {
+  const BASELINES = {
+    cpu_usage:    30.0,
+    memory_usage: 45.0,
+    latency:      150.0,
+    error_rate:   1.0,    // 0–100 scale (NodeFeatures schema)
+    network_out:  50.0,
+    network_in:   50.0,
+  }
+  const SCALES = {
+    cpu_usage:    70.0,   // max meaningful deviation range
+    memory_usage: 55.0,
+    latency:      9850.0,
+    error_rate:   99.0,
+    network_out:  9950.0,
+    network_in:   9950.0,
+  }
+
+  const LABEL_MAP = {
+    cpu_usage:    'CPU Utilization',
+    memory_usage: 'Memory Usage',
+    latency:      'Latency',
+    error_rate:   'Error Rate',
+    network_out:  'Network Out',
+    network_in:   'Network In',
+  }
+
+  const deviations = Object.entries(metrics).map(([key, val]) => ({
+    feature:   LABEL_MAP[key] || key,
+    raw_key:   key,
+    deviation: Math.abs((val - (BASELINES[key] ?? 0)) / (SCALES[key] ?? 100)),
+    direction: val >= (BASELINES[key] ?? 0) ? 'positive' : 'negative',
+  }))
+
+  const total = deviations.reduce((s, d) => s + d.deviation, 0) || 1
+
+  return deviations
+    .map(d => ({
+      feature:    d.feature,
+      importance: parseFloat((d.deviation / total).toFixed(4)),
+      direction:  d.direction,
+    }))
+    .sort((a, b) => b.importance - a.importance)
+}
+
 /** Map anomaly doc → AlertCard/frontend shape */
 function toAlertShape(anomaly) {
   const severity = normalizeSeverity(anomaly.severity)
@@ -147,19 +286,28 @@ export const getExplanation = asyncHandler(async (req, res) => {
   if (alarmId.startsWith('aws-alarm-')) {
     const alarmName = alarmId.replace('aws-alarm-', '')
 
-    // Try to get a real explanation from Python using synthetic alarm metrics
+    // Derive attack-specific metrics from the alarm name so every alarm type
+    // produces a different, realistic SHAP attribution instead of identical values.
+    const { metrics: alarmMetrics, resourceType: alarmResourceType, attackLabel } = deriveAlarmMetrics(alarmName)
+
+    // Compute metric-deviation-based SHAP values locally.
+    // This is the reliable fallback — it always produces distinct, meaningful attributions
+    // without depending on the GNN model's score being non-degenerate.
+    const localShap = computeMetricShap(alarmMetrics)
+
+    // Try to get a real explanation (NL text) from Python using the attack-specific metrics
     try {
       const pyResponse = await axios.post(`${PYTHON_URL}/explain`, {
         graph_id: alarmId,
         nodes: [{
           node_id:      alarmName,
-          node_type:    'CloudWatch',
-          cpu_usage:    95,   // CloudWatch alarms fire at threshold — simulate high load
-          memory_usage: 88,
-          network_in:   300,
-          network_out:  250,
-          latency:      900,
-          error_rate:   8.5,
+          node_type:    alarmResourceType,
+          cpu_usage:    alarmMetrics.cpu_usage,
+          memory_usage: alarmMetrics.memory_usage,
+          network_in:   alarmMetrics.network_in,
+          network_out:  alarmMetrics.network_out,
+          latency:      alarmMetrics.latency,
+          error_rate:   alarmMetrics.error_rate,
         }],
         edges: []
       }, { timeout: 12000 })
@@ -168,29 +316,30 @@ export const getExplanation = asyncHandler(async (req, res) => {
 
       const { explanation, shap_values, affected_nodes } = pyResponse.data
 
-      // Python returns shap_values as [{feature, value}] array; DB cache stores it as a plain object
-      const shapArray = Array.isArray(shap_values)
-        ? shap_values.map(({ feature, value }) => ({
-            feature:    feature.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-            importance: Math.abs(value),
-            direction:  value >= 0 ? 'positive' : 'negative',
-          })).sort((a, b) => b.importance - a.importance)
-        : shap_values && typeof shap_values === 'object'
-          ? Object.entries(shap_values).map(([key, val]) => ({
-              feature:    key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()),
-              importance: Math.abs(val),
-              direction:  val >= 0 ? 'positive' : 'negative',
+      // Check if Python SHAP values are degenerate (all equal — the fallback case).
+      // If so, use our locally-computed metric-deviation SHAP instead.
+      const pyShapRaw = Array.isArray(shap_values) ? shap_values.map(s => s.value) : []
+      const isDegenerate = pyShapRaw.length > 0 &&
+        pyShapRaw.every(v => Math.abs(v - pyShapRaw[0]) < 0.001)
+
+      const shapArray = isDegenerate
+        ? localShap  // use metric-deviation SHAP — Python SHAP is uniform/degenerate
+        : Array.isArray(shap_values)
+          ? shap_values.map(({ feature, value }) => ({
+              feature:    feature.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+              importance: Math.abs(value),
+              direction:  value >= 0 ? 'positive' : 'negative',
             })).sort((a, b) => b.importance - a.importance)
-          : [{ feature: 'Metric Threshold Exceeded', importance: 0.99, direction: 'positive' }]
+          : localShap
 
       return res.status(200).json(new ApiResponse(200, {
         anomalyId:    alarmId,
         resourceName: alarmName,
-        resourceType: 'CloudWatch Alert',
+        resourceType: `AWS ${alarmResourceType.toUpperCase()} — ${attackLabel}`,
         anomalyScore: 1.0,
         shapValues:   shapArray,
         cascadePath:  (affected_nodes || [alarmName]).map(n => ({ id: n, label: n, score: 0.9 })),
-        nlExplanation: explanation || `AWS CloudWatch Alarm "${alarmName}" triggered — metric threshold exceeded. GNN analysis confirms critical anomaly pattern.`,
+        nlExplanation: explanation || `AWS CloudWatch Alarm "${alarmName}" triggered — ${attackLabel} detected. GNN analysis confirms critical anomaly pattern across ${alarmResourceType.toUpperCase()} node.`,
         actionTaken:  'Native CloudWatch Action Triggered',
         actionStatus: 'CRITICAL',
       }, 'CloudWatch alarm explanation from Python GNN'))

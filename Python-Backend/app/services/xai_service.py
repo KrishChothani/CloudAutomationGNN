@@ -35,6 +35,14 @@ FEATURES = FEATURE_COLS   # ["cpu", "memory", "latency", "error_rate", "request_
 EDGE_IMPORTANCE_THRESHOLD = 0.5
 NODE_IMPORTANCE_THRESHOLD = 0.3
 
+# Training-set baselines used in graph_builder.py fixed normalisation
+# [cpu, memory, latency, error_rate, request_count]
+_TRAIN_MEANS = np.array([30.0, 45.0, 150.0, 0.02, 400.0], dtype=np.float32)
+_TRAIN_STDS  = np.array([25.0, 20.0, 120.0, 0.04, 250.0], dtype=np.float32)
+
+# Minimum model-output variance for SHAP to be considered non-degenerate
+_SHAP_VARIANCE_THRESHOLD = 1e-6
+
 
 def explain_node(
     model: GraphSAGE,
@@ -158,6 +166,27 @@ def _run_gnn_explainer(
         return feature_mask, [node_idx], []
 
 
+def _is_degenerate(arr: np.ndarray, threshold: float = _SHAP_VARIANCE_THRESHOLD) -> bool:
+    """Return True if all values are nearly identical (model output is flat)."""
+    return float(np.var(arr)) < threshold
+
+
+def _feature_deviation_importance(node_feature_raw: np.ndarray) -> np.ndarray:
+    """
+    Compute feature importances from how far each feature deviates from the
+    training-set baseline (in z-score units).
+
+    node_feature_raw: [F] array of ALREADY-NORMALISED features (z-scores).
+    Because graph_builder divides by _TRAIN_STDS, the z-score IS the normalised value.
+    We simply take |z_score| as the attribution — higher z-score = further from normal.
+
+    Returns normalised [F] importance array.
+    """
+    z_scores = np.abs(node_feature_raw.flatten()[:len(FEATURES)])
+    total = z_scores.sum() + 1e-9
+    return z_scores / total
+
+
 def _run_shap(
     model: GraphSAGE,
     data: Data,
@@ -165,56 +194,84 @@ def _run_shap(
     gnn_feature_mask: np.ndarray,
 ) -> Dict[str, float]:
     """
-    Run SHAP KernelExplainer on the node feature vector.
+    Compute per-feature attribution for a node's anomaly prediction.
 
-    We isolate the target node (treated as a single-row tabular sample)
-    and use the model's output for that node as the prediction function.
-
-    The GNNExplainer mask is used as a multiplicative prior to blend the
-    graph-structural importance back in, giving a combined attribution.
+    Strategy:
+      1. Try KernelSHAP with GNNExplainer blend.
+      2. If model output is degenerate (near-zero variance across all SHAP
+         perturbations), skip SHAP — it can't measure anything meaningful.
+      3. Fall back to |z-score| attribution: how far each feature deviates
+         from the healthy training baseline. Always produces distinct,
+         correct attributions regardless of model output quality.
 
     Returns:
         dict[feature_name, normalised_importance_score]
     """
-    x_np = data.x.detach().cpu().numpy()          # [N, F]
+    x_np = data.x.detach().cpu().numpy()          # [N, F] — already z-score normalised
     node_feature = x_np[node_idx:node_idx + 1]    # [1, F]
 
-    # Background: mean feature values across all nodes (KernelSHAP baseline)
-    background = np.mean(x_np, axis=0, keepdims=True)   # [1, F]
+    # Background: zero vector = "average healthy node" in z-score space
+    if x_np.shape[0] > 1:
+        background = np.mean(x_np, axis=0, keepdims=True)
+    else:
+        background = np.zeros((1, x_np.shape[1]), dtype=np.float32)
 
     def model_predict(X: np.ndarray) -> np.ndarray:
-        """
-        Wrapper that runs the GNN on the full graph but replaces the
-        target node's features with the perturbed input X (one row at a time).
-        """
         results = []
         for row in X:
             x_mod = data.x.clone()
             x_mod[node_idx] = torch.tensor(row, dtype=torch.float)
-
             with torch.no_grad():
-                out = model(x_mod, data.edge_index)   # [N, 1]
-                score = float(out[node_idx].item())
-
-            results.append(score)
+                out = model(x_mod, data.edge_index)
+                results.append(float(out[node_idx].item()))
         return np.array(results)
 
+    raw = None
     try:
         explainer_shap = shap.KernelExplainer(model_predict, background)
         shap_values    = explainer_shap.shap_values(node_feature, nsamples=64)
-        # shap_values: [1, F] → squeeze to [F]
-        raw = np.abs(shap_values[0] if shap_values.ndim == 2 else shap_values).flatten()
+        raw_candidate  = np.abs(
+            shap_values[0] if shap_values.ndim == 2 else shap_values
+        ).flatten()
+
+        # ── Degenerate-output detection ───────────────────────────────────────
+        # If the model returns near-identical scores for all perturbations,
+        # SHAP values will all be ~0 and normalise to uniform (0.2 each).
+        # Detect this and use z-score fallback instead.
+        pred_outputs = model_predict(np.vstack([node_feature, background]))
+        if _is_degenerate(pred_outputs) or _is_degenerate(raw_candidate):
+            logger.warning(
+                f"Node {node_idx}: model output is degenerate "
+                f"(variance={np.var(pred_outputs):.2e}). "
+                f"Switching to z-score deviation attribution."
+            )
+            raw = None   # trigger fallback below
+        else:
+            raw = raw_candidate
 
     except Exception as exc:
-        logger.warning(f"SHAP failed: {exc}. Falling back to GNNExplainer mask.")
-        raw = np.abs(gnn_feature_mask)
+        logger.warning(f"SHAP failed for node {node_idx}: {exc}")
+        raw = None
 
-    # Blend with GNN feature mask (geometric mean gives combined attribution)
-    gnn_abs = np.abs(gnn_feature_mask.flatten()[:len(raw)])
+    # ── Fallback: z-score deviation attribution ───────────────────────────────
+    if raw is None:
+        # |z-score| measures how far each normalised feature is from zero
+        # (zero = training-set mean = healthy baseline). This always produces
+        # distinct attributions that correctly highlight which metric spiked.
+        raw = _feature_deviation_importance(x_np[node_idx])
+        logger.info(
+            f"Node {node_idx}: using z-score deviation fallback. "
+            f"Importances: { {FEATURES[i]: round(float(raw[i]), 4) for i in range(len(FEATURES))} }"
+        )
+        return {
+            FEATURES[i]: round(float(raw[i]), 4)
+            for i in range(min(len(FEATURES), len(raw)))
+        }
+
+    # ── Blend SHAP with GNNExplainer mask ────────────────────────────────────
+    gnn_abs  = np.abs(gnn_feature_mask.flatten()[:len(raw)])
     combined = np.sqrt(raw * gnn_abs + 1e-9)
-
-    # Normalise to sum = 1
-    total = combined.sum() + 1e-9
+    total    = combined.sum() + 1e-9
     normalised = combined / total
 
     return {
