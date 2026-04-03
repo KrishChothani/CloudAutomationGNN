@@ -202,23 +202,29 @@ jobs:
           echo "💥 Simulating MULTI-NODE CASCADE FAILOVER across all resource types..."
           RUN_ID="${{ github.run_id }}"
 
+          # Format: RESOURCE|TYPE|METRIC|NAMESPACE|THRESHOLD|SEVERITY
+          # Severity spread: critical=DB primary failure, high=user-facing infra,
+          #                  medium=backend services, low=async/storage nodes
           NODES=(
-            "ec2-web-production|ec2|CPUUtilization|AWS/EC2|90"
-            "ec2-data-processing|ec2|CPUUtilization|AWS/EC2|90"
-            "lambda-auth-service|lambda|Duration|AWS/Lambda|28000"
-            "lambda-order-processor|lambda|Errors|AWS/Lambda|100"
-            "lambda-image-resizer|lambda|Duration|AWS/Lambda|28000"
-            "rds-primary-db|rds|DatabaseConnections|AWS/RDS|400"
-            "rds-replica-db|rds|ReadLatency|AWS/RDS|500"
-            "s3-user-data-bucket|s3|BytesDownloaded|AWS/S3|1073741824"
-            "api-gateway-edge|elb|NetworkPacketsIn|AWS/EC2|1000000"
+            "rds-primary-db|rds|DatabaseConnections|AWS/RDS|400|critical"
+            "rds-replica-db|rds|ReadLatency|AWS/RDS|500|critical"
+            "ec2-web-production|ec2|CPUUtilization|AWS/EC2|90|high"
+            "api-gateway-edge|elb|NetworkPacketsIn|AWS/EC2|1000000|high"
+            "lambda-auth-service|lambda|Duration|AWS/Lambda|28000|medium"
+            "ec2-data-processing|ec2|CPUUtilization|AWS/EC2|90|medium"
+            "lambda-order-processor|lambda|Errors|AWS/Lambda|100|low"
+            "lambda-image-resizer|lambda|Duration|AWS/Lambda|28000|low"
+            "s3-user-data-bucket|s3|BytesDownloaded|AWS/S3|1073741824|low"
           )
 
           for ENTRY in "${NODES[@]}"; do
-            IFS='|' read -r RESOURCE RESOURCE_TYPE ALARM_METRIC NAMESPACE THRESHOLD <<< "$ENTRY"
-            ALARM_NAME="GNN-Failover-$RESOURCE-$RUN_ID"
+            IFS='|' read -r RESOURCE RESOURCE_TYPE ALARM_METRIC NAMESPACE THRESHOLD SEVERITY <<< "$ENTRY"
 
-            echo "🛠️  Creating alarm for $RESOURCE ..."
+            # Embed severity in alarm name so Node backend can parse it
+            # Format: GNN-Failover-SEV-{severity}-{resource}-{run_id}
+            ALARM_NAME="GNN-Failover-SEV-${SEVERITY}-${RESOURCE}-${RUN_ID}"
+
+            echo "🛠️  Creating SEV-${SEVERITY^^} alarm for $RESOURCE ..."
             aws cloudwatch put-metric-alarm \
               --alarm-name "$ALARM_NAME" \
               --metric-name "$ALARM_METRIC" \
@@ -229,14 +235,15 @@ jobs:
               --comparison-operator GreaterThanThreshold \
               --evaluation-periods 1
 
-            echo "🚨  Tripping alarm for $RESOURCE into ALARM state..."
+            echo "🚨  Tripping SEV-${SEVERITY^^} alarm for $RESOURCE ..."
             aws cloudwatch set-alarm-state \
               --alarm-name "$ALARM_NAME" \
               --state-value ALARM \
-              --state-reason "CASCADE FAILOVER: $RESOURCE exceeded threshold — GNN anomaly detection triggered"
+              --state-reason "CASCADE FAILOVER [${SEVERITY^^}]: $RESOURCE exceeded threshold — GNN anomaly pipeline triggered"
           done
 
-          echo "✅ All CloudWatch alarms created and tripped."
+          echo "✅ All CloudWatch alarms created with severity-encoded names."
+          echo "📊 Severity distribution: 2 CRITICAL | 2 HIGH | 2 MEDIUM | 3 LOW"
 
       - name: 5. Multi-Node Cascade Failover — Emit Batch EventBridge Events
         if: github.event.inputs.attackType == 'multi_node_failover'

@@ -179,23 +179,36 @@ async function fetchDirectAwsAlarms() {
     const data = await cwClient.send(new DescribeAlarmsCommand({ StateValue: 'ALARM' }))
     const alarms = data.MetricAlarms || []
     
-    return alarms.map(alarm => ({
-      id:           `aws-alarm-${alarm.AlarmName.replace(/\s+/g, '-')}`,
-      resourceName: alarm.Namespace || 'AWS Resource',
-      resourceType: 'CloudWatch Alert',
-      cause:        alarm.AlarmDescription || alarm.StateReason || 'AWS CloudWatch Alarm Triggered',
-      anomalyScore: 1.0, 
-      severity:     'CRITICAL',
-      timestamp:    alarm.StateUpdatedTimestamp || new Date(),
-      actionStatus: 'PENDING',
-      resolved:     false,
-      region:       process.env.AWS_REGION || 'ap-south-1',
-    }))
+    return alarms.map(alarm => {
+      const name = alarm.AlarmName || ''
+
+      // Parse severity from SEV-{level} encoded in the alarm name
+      // Format written by the GitHub Actions workflow: GNN-Failover-SEV-critical-...
+      const sevMatch = name.match(/SEV-(critical|high|medium|low)/i)
+      const severity = sevMatch ? sevMatch[1].toUpperCase() : 'CRITICAL'
+
+      // Map severity to a realistic anomaly score range
+      const SCORE_MAP = { CRITICAL: 0.95, HIGH: 0.78, MEDIUM: 0.61, LOW: 0.38 }
+      const anomalyScore = SCORE_MAP[severity] ?? 1.0
+
+      return {
+        id:           `aws-alarm-${name.replace(/\s+/g, '-')}`,
+        resourceName: name,
+        resourceType: 'CloudWatch Alert',
+        cause:        alarm.AlarmDescription || alarm.StateReason || 'AWS CloudWatch Alarm Triggered',
+        anomalyScore,
+        severity,
+        timestamp:    alarm.StateUpdatedTimestamp || new Date(),
+        actionStatus: 'PENDING',
+        resolved:     false,
+        region:       process.env.AWS_REGION || 'ap-south-1',
+      }
+    })
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
       console.warn('⚠️ Could not fetch direct AWS Alarms. Is AWS_ACCESS_KEY_ID configured?', err.message)
     }
-    return [] // Return empty array if no AWS perms
+    return []
   }
 }
 
