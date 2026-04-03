@@ -52,14 +52,14 @@ torch.manual_seed(SEED)
 FEATURE_COLS = ["cpu", "memory", "latency", "error_rate", "request_count"]
 
 # ─── Node type counts ─────────────────────────────────────────────────────────
-N_EC2    = 8
-N_LAMBDA = 5
-N_RDS    = 4
-N_S3     = 3
-N_TOTAL  = N_EC2 + N_LAMBDA + N_RDS + N_S3   # 20
+N_EC2    = 4000
+N_LAMBDA = 2500
+N_RDS    = 2000
+N_S3     = 1500
+N_TOTAL  = N_EC2 + N_LAMBDA + N_RDS + N_S3   # 10000
 
-# ─── Anomaly indices (4 nodes — spread across EC2 and Lambda) ─────────────────
-ANOMALY_INDICES = {0, 3, 8, 11}   # ec2-0, ec2-3, lambda-3, rds-0
+# ─── Anomaly indices (~20% of nodes) ─────────────────
+ANOMALY_INDICES = set(random.sample(range(N_TOTAL), int(N_TOTAL * 0.20)))
 
 
 def _normal_features(node_type: str) -> dict:
